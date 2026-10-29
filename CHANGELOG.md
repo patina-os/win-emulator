@@ -6,7 +6,7 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
-## [0.1.0-alpha.1] - 2026-10-29
+## [0.0.1-alpha] - 2026-10-29
 
 The first alpha, for testers with a Windows PC.
 
@@ -21,5 +21,5 @@ The first alpha, for testers with a Windows PC.
 - An icon in the notification area: shut patina down, turn it off, open the data
   folder, install patina again, remove it, and a note when a newer launcher is out.
 
-[Unreleased]: https://github.com/patina-os/win-emulator/compare/v0.1.0-alpha.1...HEAD
-[0.1.0-alpha.1]: https://github.com/patina-os/win-emulator/releases/tag/v0.1.0-alpha.1
+[Unreleased]: https://github.com/patina-os/win-emulator/compare/v0.0.1-alpha...HEAD
+[0.0.1-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.1-alpha
