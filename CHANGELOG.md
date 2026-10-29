@@ -6,6 +6,13 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+### Added
+
+- When the last install did not finish, as far as the launcher can tell, it offers to
+  start the disk as it is ("patina is installed: start it"), next to starting the
+  installer again or over with an empty disk. An installer closed or restarted without
+  the launcher noticing no longer leaves only a reinstall.
+
 ## [0.0.1-alpha] - 2026-10-29
 
 The first alpha, for testers with a Windows PC.
