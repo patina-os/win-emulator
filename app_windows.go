@@ -329,15 +329,34 @@ func (a *app) setup(st State) (done bool, err error) {
 			a.opts(zenity.OKLabel("Set up patina"), zenity.CancelLabel("Not now"), zenity.QuestionIcon,
 				zenity.Width(460))...)
 	} else {
-		err = zenity.Question("The installation of patina did not finish. Start the installer again?",
-			a.opts(zenity.OKLabel("Start the installer"), zenity.ExtraButton("Start over"),
-				zenity.CancelLabel("Not now"), zenity.QuestionIcon)...)
-		if errors.Is(err, zenity.ErrExtraButton) {
+		// The launcher saw no restart by the installer, but the installer may have
+		// finished all the same (it was closed, or the restart went unnoticed), so the
+		// user can say so and start the disk.
+		const (
+			again     = "Start the installer again"
+			installed = "patina is installed: start it"
+			over      = "Start over with an empty disk"
+		)
+		var choice string
+		choice, err = zenity.List("The installation of patina did not finish last time, as far as Try patina "+
+			"can tell. What now?", []string{again, installed, over},
+			a.opts(zenity.DefaultItems(again), zenity.OKLabel("Continue"), zenity.CancelLabel("Not now"),
+				zenity.Width(480), zenity.Height(320))...)
+		switch {
+		case err != nil:
+		case choice == installed:
+			if fi, serr := os.Stat(filepath.Join(a.dir, diskFile)); serr == nil && fi.Size() >= minInstalledDisk {
+				st.Phase = phaseInstalled
+				a.log.Print("the user says patina is installed")
+				return true, st.save(a.dir)
+			}
+			zenity.Info("The virtual disk is almost empty, so patina is not on it yet. The installer opens instead.",
+				a.opts()...)
+		case choice == over:
 			if err := a.wipe(); err != nil {
 				return false, err
 			}
 			st = State{}
-			err = nil
 		}
 	}
 	if err != nil {

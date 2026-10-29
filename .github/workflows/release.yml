@@ -1,10 +1,17 @@
-# A v* tag builds TryPatina.exe and attaches it and its checksum to the tag's release,
-# created as a draft: it is published by hand after a run on a real Windows PC.
+# A v* tag builds TryPatina.exe and attaches it and its checksum to the tag's release.
+# A release made by hand keeps its notes; one this workflow creates is a draft with the
+# tag's section of CHANGELOG.md, published by hand after a run on a real Windows PC.
+# Run it by hand (workflow_dispatch) to build an existing tag again and attach the exe.
 name: release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The existing tag to build and attach TryPatina.exe to, such as v0.0.1-alpha
+        required: true
 
 defaults:
   run:
@@ -18,22 +25,30 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ env.TAG }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - run: go test ./...
-      - run: ./build.sh "$GITHUB_REF_NAME"
-      - name: Create the release as a draft, with the tag's section of CHANGELOG.md as notes
+      - run: ./build.sh "$TAG"
+      - name: The tag's release, created as a draft when it does not exist yet
         run: |
-          tag="$GITHUB_REF_NAME"
-          version="${tag#v}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "release $TAG exists; its notes stay as they are"
+            exit 0
+          fi
+          version="${TAG#v}"
+          # The section ends at the next heading; the link references below it stay out.
           awk -v head="## [$version]" '
             /^## \[/ { if (on) exit; on = index($0, head) == 1; next }
             on && !/^\[[^]]*\]: /' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           [[ -s "$RUNNER_TEMP/notes.md" ]] || { echo "CHANGELOG.md has no section for $version"; exit 1; }
-          flags=(--draft --title "Try patina $tag" --notes-file "$RUNNER_TEMP/notes.md")
+          flags=(--draft --title "Try patina $TAG" --notes-file "$RUNNER_TEMP/notes.md")
           if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
-          gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" "${flags[@]}"
-      - run: gh release upload "$GITHUB_REF_NAME" dist/TryPatina.exe dist/TryPatina.exe.sha256 --clobber
+          gh release create "$TAG" "${flags[@]}"
+      - name: Attach TryPatina.exe and its checksum
+        run: gh release upload "$TAG" dist/TryPatina.exe dist/TryPatina.exe.sha256 --clobber
