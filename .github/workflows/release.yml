@@ -1,7 +1,8 @@
 # A v* tag builds TryPatina.exe and attaches it and its checksum to the tag's release.
 # A release made by hand keeps its notes; one this workflow creates is a draft with the
 # tag's section of CHANGELOG.md, published by hand after a run on a real Windows PC.
-# Run it by hand (workflow_dispatch) to build an existing tag again and attach the exe.
+# Run it by hand (workflow_dispatch) to build an existing tag again and attach the exe;
+# with publish, the release is published too, without waiting for the Windows run.
 name: release
 
 on:
@@ -12,6 +13,10 @@ on:
       tag:
         description: The existing tag to build and attach TryPatina.exe to, such as v0.0.1-alpha
         required: true
+      publish:
+        description: Publish the release (a draft stays a draft otherwise)
+        type: boolean
+        default: false
 
 defaults:
   run:
@@ -52,3 +57,6 @@ jobs:
           gh release create "$TAG" "${flags[@]}"
       - name: Attach TryPatina.exe and its checksum
         run: gh release upload "$TAG" dist/TryPatina.exe dist/TryPatina.exe.sha256 --clobber
+      - name: Publish the release
+        if: inputs.publish
+        run: gh release edit "$TAG" --draft=false
