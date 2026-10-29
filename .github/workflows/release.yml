@@ -1,0 +1,39 @@
+# A v* tag builds TryPatina.exe and attaches it and its checksum to the tag's release,
+# created as a draft: it is published by hand after a run on a real Windows PC.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: ./build.sh "$GITHUB_REF_NAME"
+      - name: Create the release as a draft, with the tag's section of CHANGELOG.md as notes
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          awk -v head="## [$version]" '
+            /^## \[/ { if (on) exit; on = index($0, head) == 1; next }
+            on && !/^\[[^]]*\]: /' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          [[ -s "$RUNNER_TEMP/notes.md" ]] || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+          flags=(--draft --title "Try patina $tag" --notes-file "$RUNNER_TEMP/notes.md")
+          if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
+          gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" "${flags[@]}"
+      - run: gh release upload "$GITHUB_REF_NAME" dist/TryPatina.exe dist/TryPatina.exe.sha256 --clobber

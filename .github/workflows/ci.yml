@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          [[ -z "$unformatted" ]] || { echo "not gofmt'ed: $unformatted"; exit 1; }
+      - name: shellcheck
+        run: shellcheck build.sh
+      - name: Build TryPatina.exe (fetches patina's icon, then cross-compiles)
+        run: ./build.sh "dev-${GITHUB_SHA::7}"
+      - name: go vet, for Linux and for Windows
+        run: |
+          go vet ./...
+          GOOS=windows go vet ./...
+      - name: Unit tests
+        run: go test -race ./...
+      - name: The QEMU arguments start QEMU
+        # Debian's QEMU on the runner takes the launcher's command line with the two
+        # Windows-only backends (the GTK window and DirectSound) swapped for headless
+        # ones, and with emulation, and must keep running.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q qemu-system-x86 qemu-utils ovmf
+          go test -count=1 -run TestQEMUStarts -v ./...
+        env:
+          TRY_PATINA_QEMU: qemu-system-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TryPatina
+          path: dist/
