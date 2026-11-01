@@ -39,6 +39,21 @@ func TestArgsInstallRun(t *testing.T) {
 	}
 }
 
+func TestSizingFitsTheInstaller(t *testing.T) {
+	// The setup refuses a host whose machine would get less than the installer needs;
+	// a host with 6 GB or more must pass.
+	for _, hostMB := range []uint64{6144, 8192, 16384} {
+		if mb, _ := sizing(hostMB, 4); mb < installerMemoryMB {
+			t.Errorf("a host with %d MB gives the machine %d MB, less than the installer's %d", hostMB, mb, installerMemoryMB)
+		}
+	}
+	for _, hostMB := range []uint64{3891, 4096} {
+		if mb, _ := sizing(hostMB, 4); mb >= installerMemoryMB {
+			t.Errorf("a host with %d MB gives the machine %d MB; the setup would let the installer refuse it", hostMB, mb)
+		}
+	}
+}
+
 func TestClipboardByVersion(t *testing.T) {
 	for _, c := range []struct {
 		version string
@@ -102,6 +117,7 @@ func TestSizing(t *testing.T) {
 		{16384, 8, 8192, 4},
 		{8192, 4, 4096, 2},
 		{4096, 2, 3072, 2}, // never more than three quarters of a small host
+		{3891, 4, 2816, 2}, // a PC sold with 4 GB: too little for patina's installer
 		{65536, 1, 8192, 1},
 	} {
 		mb, cpus := sizing(c.hostMB, c.hostCPUs)

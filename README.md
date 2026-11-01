@@ -4,7 +4,7 @@ patina in a window on your Windows PC: a virtual machine that leaves your drive 
 Windows as they are. `TryPatina.exe` sets it up, installs patina from its released
 image, and starts it from then on. Your files in patina stay between sessions.
 
-Windows 10 or 11 · x86_64 · hardware virtualization
+Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memory
 
 ## Get started
 

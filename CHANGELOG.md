@@ -19,6 +19,10 @@ All notable changes to Try patina for Windows are documented here. The format fo
   has no image: its images are attached a quarter of an hour after it is published,
   once they passed their boot test, or not at all when it failed. The launcher then
   installs the newest release before it that has one.
+- On a PC with 4 GB of memory the setup downloaded the image and opened an installer
+  that refused to go on: the machine gets at most three quarters of the PC's memory,
+  less than the 3 GB patina's installer asks for. The setup now says so before the
+  download.
 
 ## [0.0.2-alpha] - 2026-10-29
 

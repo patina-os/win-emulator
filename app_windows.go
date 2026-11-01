@@ -384,6 +384,16 @@ func (a *app) setup(st State) (done bool, err error) {
 	if err != nil {
 		return false, nil
 	}
+	// The machine gets at most three quarters of the host's memory; when that is less
+	// than the installer asks for, it would stop on its first page, after the download
+	// (and before QEMU is installed for nothing).
+	hostMB := hostMemoryMB()
+	if memoryMB, _ := sizing(hostMB, runtime.NumCPU()); memoryMB < installerMemoryMB {
+		zenity.Error(fmt.Sprintf("This PC has %.1f GB of memory. patina's installer needs 3 GB of its own "+
+			"while Windows keeps running, so Try patina needs a PC with more than 4 GB.",
+			float64(hostMB)/1024), a.opts()...)
+		return false, nil
+	}
 	if err := a.prepare(true); err != nil {
 		return false, err
 	}

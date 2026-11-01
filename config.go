@@ -21,6 +21,11 @@ const (
 	// The installer writes several GB; a disk smaller than this after the installer
 	// restarted the machine holds no system (the user restarted the live system).
 	minInstalledDisk = 2 << 30
+	// The smallest machine, in MB, that patina's installer accepts: it wants 95% of
+	// 3 GiB as the kernel's total memory (requiredRam in patina's Calamares
+	// welcome.conf), and firmware and kernel keep about 170 MB of the machine's, so a
+	// machine of 3072 MB fails (2906 MB) and one of 3328 MB passes (3158 MB).
+	installerMemoryMB = 3328
 	// Free space the first setup asks for: the image, Debian with Plasma and the
 	// default apps (docs/vm-run.md in patina names 40 GB for a test VM).
 	minFreeSpace = 40 << 30
