@@ -23,6 +23,9 @@ All notable changes to Try patina for Windows are documented here. The format fo
   that refused to go on: the machine gets at most three quarters of the PC's memory,
   less than the 3 GB patina's installer asks for. The setup now says so before the
   download.
+- A download stopped before a new patina release came out no longer ends in "does
+  not match its checksum": the launcher continued the old image's part with the new
+  image. It now starts over by itself when a continued download does not match.
 
 ## [0.0.2-alpha] - 2026-10-29
 

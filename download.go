@@ -132,8 +132,9 @@ func imageRelease(ctx context.Context, c *http.Client, repo, image string) (tag,
 }
 
 // download fetches url to dest and checks its SHA-256. It continues a .part file left
-// by an earlier, interrupted run where the server allows. progress gets the bytes so
-// far and the total (0 when unknown).
+// by an earlier, interrupted run where the server allows, and starts over once when
+// the part turns out to be of another file (an older image of the same name).
+// progress gets the bytes so far and the total (0 when unknown).
 func download(ctx context.Context, c *http.Client, url, dest, want string, progress func(done, total int64)) error {
 	part := dest + ".part"
 	h := sha256.New()
@@ -141,6 +142,9 @@ func download(ctx context.Context, c *http.Client, url, dest, want string, progr
 	if f, err := os.Open(part); err == nil {
 		have, _ = io.Copy(h, f)
 		f.Close()
+	}
+	if have > 0 && hex.EncodeToString(h.Sum(nil)) == want {
+		return os.Rename(part, dest) // complete already: the last run stopped before this
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -157,18 +161,25 @@ func download(ctx context.Context, c *http.Client, url, dest, want string, progr
 	flags := os.O_CREATE | os.O_WRONLY
 	switch resp.StatusCode {
 	case http.StatusPartialContent:
+		if !strings.HasPrefix(resp.Header.Get("Content-Range"), fmt.Sprintf("bytes %d-", have)) {
+			resp.Body.Close() // not where the part ends: start over
+			os.Remove(part)
+			return download(ctx, c, url, dest, want, progress)
+		}
 		flags |= os.O_APPEND
 	case http.StatusOK:
 		flags |= os.O_TRUNC
 		have = 0
 		h.Reset()
 	case http.StatusRequestedRangeNotSatisfiable:
-		// The part is complete already, or longer than the file: start over.
+		// The part is longer than the file: start over.
+		resp.Body.Close()
 		os.Remove(part)
 		return download(ctx, c, url, dest, want, progress)
 	default:
 		return fmt.Errorf("%s: %s", url, resp.Status)
 	}
+	resumed := have > 0
 	f, err := os.OpenFile(part, flags, 0o644)
 	if err != nil {
 		return err
@@ -187,6 +198,9 @@ func download(ctx context.Context, c *http.Client, url, dest, want string, progr
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != want {
 		os.Remove(part)
+		if resumed {
+			return download(ctx, c, url, dest, want, progress) // this time from the start
+		}
 		return fmt.Errorf("%s does not match its checksum (got %s, want %s); it was deleted", url, got, want)
 	}
 	return os.Rename(part, dest)

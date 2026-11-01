@@ -115,6 +115,30 @@ func TestImageReleaseWithoutAny(t *testing.T) {
 	}
 }
 
+func TestDownloadParts(t *testing.T) {
+	fakeGitHub(t)
+	sum := sha256.Sum256([]byte(fakeImage))
+	want := hex.EncodeToString(sum[:])
+	for _, c := range []struct {
+		name, part string
+	}{
+		{"an older image's part is replaced", strings.Repeat("amethyst ", 30000)},
+		{"a part longer than the image is replaced", fakeImage + "and more"},
+		{"a complete part is kept", fakeImage},
+	} {
+		dest := filepath.Join(t.TempDir(), isoName)
+		os.WriteFile(dest+".part", []byte(c.part), 0o644)
+		err := download(context.Background(), http.DefaultClient,
+			releaseAsset(patinaRepo, "v0.1.0-alpha.3", isoName), dest, want, nil)
+		if b, _ := os.ReadFile(dest); err != nil || string(b) != fakeImage {
+			t.Errorf("%s: %v, %d bytes", c.name, err, len(b))
+		}
+		if fileExists(dest + ".part") {
+			t.Errorf("%s: the part stays", c.name)
+		}
+	}
+}
+
 func TestDownloadRejectsAWrongChecksum(t *testing.T) {
 	fakeGitHub(t)
 	dest := filepath.Join(t.TempDir(), isoName)
