@@ -11,6 +11,7 @@ import (
 // Machine is one start of the virtual machine: what QEMU gets on its command line.
 type Machine struct {
 	QEMUDir  string // holds qemu-system-x86_64w.exe and share/
+	Version  string // QEMU's version, such as 11.1.0, from the VERSION file in QEMUDir
 	DataDir  string // holds the disk, the UEFI variables and the logs
 	MemoryMB int
 	CPUs     int
@@ -31,6 +32,20 @@ const (
 	firmwareCode      = "edk2-x86_64-code.fd"
 	firmwareVarsBlank = "edk2-i386-vars.fd" // QEMU pairs the x86_64 code with these
 )
+
+// The GTK window shares the Windows clipboard from QEMU 11.1, and only when asked to:
+// before, the Windows builds had no clipboard in that window at all.
+const clipboardMajor, clipboardMinor = 11, 1
+
+// versionAtLeast is true when a QEMU version such as 11.1.0 is major.minor or later.
+// An unknown version is not.
+func versionAtLeast(v string, major, minor int) bool {
+	var a, b int
+	if _, err := fmt.Sscanf(v, "%d.%d", &a, &b); err != nil {
+		return false
+	}
+	return a > major || a == major && b >= minor
+}
 
 // qemuPath escapes a path for a QEMU option value, where a comma separates options
 // and two commas are one comma.
@@ -72,9 +87,13 @@ func (m Machine) Args() []string {
 			"-no-reboot",
 		)
 	}
+	display := "gtk,show-tabs=off,zoom-to-fit=on,window-close=off"
+	if versionAtLeast(m.Version, clipboardMajor, clipboardMinor) {
+		display += ",clipboard=on" // an older QEMU refuses the option and does not start
+	}
 	a = append(a,
 		"-device", "virtio-vga,xres=1920,yres=1080",
-		"-display", "gtk,show-tabs=off,zoom-to-fit=on,window-close=off",
+		"-display", display,
 		"-device", "qemu-xhci",
 		"-device", "usb-tablet",
 		"-nic", "user,model=virtio-net-pci",

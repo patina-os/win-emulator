@@ -6,6 +6,13 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+### Fixed
+
+- Copy and paste between Windows and patina: QEMU 11.1, the one winget installs,
+  shares the Windows clipboard with its window only when asked, and the launcher did
+  not ask. It does now (`-display gtk,clipboard=on`), and the setup offers to update an
+  older QEMU, whose window has no clipboard at all.
+
 ## [0.0.2-alpha] - 2026-10-29
 
 The second alpha, for the image of patina 0.1.0-alpha.4.

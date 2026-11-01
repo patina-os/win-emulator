@@ -42,6 +42,7 @@ type app struct {
 	logFile *os.File
 	http    *http.Client
 	qemuDir string
+	qemuVer string // from QEMU's VERSION file, such as 11.1.0
 	accel   string
 
 	mu    sync.Mutex
@@ -222,7 +223,7 @@ func (a *app) run() error {
 			continue
 		}
 		if a.qemuDir == "" {
-			if err := a.prepare(); err != nil {
+			if err := a.prepare(false); err != nil {
 				return err
 			}
 		}
@@ -268,8 +269,9 @@ func (a *app) wipe() error {
 	return nil
 }
 
-// prepare checks the host and finds QEMU, installing it when the user agrees.
-func (a *app) prepare() error {
+// prepare checks the host and finds QEMU, installing it when the user agrees. During
+// the setup it also offers to update a QEMU too old to share the clipboard.
+func (a *app) prepare(setup bool) error {
 	if armHost() {
 		return errors.New("Try patina needs an x86_64 PC: Windows on ARM cannot run patina's x86_64 image in its hypervisor yet")
 	}
@@ -291,30 +293,49 @@ func (a *app) prepare() error {
 		}
 	}
 	a.qemuDir = findQEMU()
-	if a.qemuDir != "" {
+	if a.qemuDir == "" {
+		if err := zenity.Question("Try patina runs patina in QEMU, the free virtual machine. It is not installed yet.\n\n"+
+			"Install it now with winget? Windows asks for permission.",
+			a.opts(zenity.OKLabel("Install QEMU"), zenity.CancelLabel("Quit"), zenity.QuestionIcon)...); err != nil {
+			return zenity.ErrCanceled
+		}
+		if err := a.winget("install", "Installing QEMU with winget…"); err != nil {
+			return err
+		}
+		if a.qemuDir = findQEMU(); a.qemuDir == "" {
+			return errors.New("QEMU was installed, but its files are not under Program Files\\qemu")
+		}
+	}
+	a.qemuVer = strings.TrimSpace(readFile(filepath.Join(a.qemuDir, "VERSION")))
+	a.log.Printf("QEMU %s in %s", a.qemuVer, a.qemuDir)
+	if !setup || versionAtLeast(a.qemuVer, clipboardMajor, clipboardMinor) {
 		return nil
 	}
-	if err := zenity.Question("Try patina runs patina in QEMU, the free virtual machine. It is not installed yet.\n\n"+
-		"Install it now with winget? Windows asks for permission.",
-		a.opts(zenity.OKLabel("Install QEMU"), zenity.CancelLabel("Quit"), zenity.QuestionIcon)...); err != nil {
-		return zenity.ErrCanceled
+	if zenity.Question(fmt.Sprintf("QEMU %s is installed. Copy and paste between Windows and patina needs "+
+		"QEMU %d.%d or later.\n\nUpdate QEMU now with winget? Windows asks for permission.",
+		a.qemuVer, clipboardMajor, clipboardMinor),
+		a.opts(zenity.OKLabel("Update QEMU"), zenity.CancelLabel("Not now"), zenity.QuestionIcon)...) != nil {
+		return nil
 	}
+	if err := a.winget("upgrade", "Updating QEMU with winget…"); err != nil {
+		return err
+	}
+	a.qemuVer = strings.TrimSpace(readFile(filepath.Join(a.qemuDir, "VERSION")))
+	a.log.Printf("QEMU %s after the update", a.qemuVer)
+	return nil
+}
+
+// winget installs QEMU or updates it (verb install or upgrade) behind a progress dialog.
+func (a *app) winget(verb, text string) error {
 	dlg, _ := zenity.Progress(a.opts(zenity.Pulsate(), zenity.NoCancel())...)
 	if dlg != nil {
-		dlg.Text("Installing QEMU with winget…")
+		dlg.Text(text)
 	}
-	err := installQEMU()
+	err := wingetQEMU(verb)
 	if dlg != nil {
 		dlg.Close()
 	}
-	if err != nil {
-		return err
-	}
-	if a.qemuDir = findQEMU(); a.qemuDir == "" {
-		return errors.New("QEMU was installed, but its files are not under Program Files\\qemu")
-	}
-	a.log.Printf("QEMU in %s", a.qemuDir)
-	return nil
+	return err
 }
 
 // setup takes a machine from nothing (or an unfinished install) to patina installed on
@@ -362,7 +383,7 @@ func (a *app) setup(st State) (done bool, err error) {
 	if err != nil {
 		return false, nil
 	}
-	if err := a.prepare(); err != nil {
+	if err := a.prepare(true); err != nil {
 		return false, err
 	}
 	if free := freeBytes(a.dir); free > 0 && free < minFreeSpace {
@@ -534,7 +555,7 @@ func (a *app) boot(iso string) (string, error) {
 // shutdown, which is how a refused accelerator or a bad option shows.
 func (a *app) start(iso string) (reason string, early bool, err error) {
 	memoryMB, cpus := sizing(hostMemoryMB(), runtime.NumCPU())
-	m := Machine{QEMUDir: a.qemuDir, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
+	m := Machine{QEMUDir: a.qemuDir, Version: a.qemuVer, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
 		Accel: a.accel, ISO: iso, QMP: freeAddr()}
 	logf, err := os.Create(filepath.Join(a.dir, qemuLog))
 	if err != nil {

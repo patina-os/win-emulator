@@ -39,6 +39,23 @@ func TestArgsInstallRun(t *testing.T) {
 	}
 }
 
+func TestClipboardByVersion(t *testing.T) {
+	for _, c := range []struct {
+		version string
+		want    bool
+	}{
+		{"11.1.0", true}, {"11.2.0-rc1", true}, {"12.0.0", true},
+		{"11.0.0", false}, {"10.2.0", false}, {"", false}, {"unknown", false},
+	} {
+		m := Machine{QEMUDir: "q", Version: c.version, DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: accelWHPX, QMP: "x:1"}
+		a := m.Args()
+		display := a[slices.Index(a, "-display")+1]
+		if got := strings.HasSuffix(display, ",clipboard=on"); got != c.want {
+			t.Errorf("QEMU %q: -display %s, want clipboard=on: %v", c.version, display, c.want)
+		}
+	}
+}
+
 func TestArgsInstalled(t *testing.T) {
 	m := Machine{QEMUDir: "q", DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: accelEmulation, QMP: "x:1"}
 	a := m.Args()

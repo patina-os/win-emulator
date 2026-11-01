@@ -33,9 +33,11 @@ From then on, `TryPatina.exe` starts patina straight away.
   patina icon in the notification area. The window's close button does nothing, so a
   click cannot cut the power to patina's disk; "Turn off now…" in the icon's menu does,
   when patina hangs.
-- **Copy and paste** of text works both ways between Windows and patina.
-  patina's login screen offers the Plasma X11 session first on this machine, because
-  that is where the clipboard is shared; the Wayland session stays on its session menu.
+- **Copy and paste** of text works both ways between Windows and patina, with QEMU
+  11.1 or later (the setup offers to update an older one; `winget upgrade
+  SoftwareFreedomConservancy.QEMU` does it by hand). patina's login screen offers the
+  Plasma X11 session first on this machine, because that is where the clipboard is
+  shared; the Wayland session stays on its session menu.
 - **Full screen and zoom** are in the window's View menu.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
@@ -73,7 +75,9 @@ binary but itself:
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the
   set the Windows Hypervisor Platform runs safely in stock QEMU.
 - **Copy and paste** is QEMU's own vdagent (`-chardev qemu-vdagent`) between QEMU's GTK
-  window and `spice-vdagent` in patina; no SPICE viewer is involved.
+  window and `spice-vdagent` in patina; no SPICE viewer is involved. The GTK window
+  shares the Windows clipboard from QEMU 11.1 on, when asked (`-display
+  gtk,clipboard=on`); the Windows builds before it have no clipboard in that window.
 - **patina** comes from its released `patina-amd64.hybrid.iso` and its installer, as
   on a PC (patina's Path B, which runs Path A on first boot). The launcher names the machine
   `Try patina` in its firmware tables (`-smbios type=1,product=Try patina`), and
