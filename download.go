@@ -7,6 +7,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,8 +16,15 @@ import (
 	"strings"
 )
 
-// github is where releases come from; tests point it at a local server.
-var github = "https://github.com"
+// github is where releases come from, and githubAPI lists them when the latest has no
+// image; tests point both at a local server.
+var (
+	github    = "https://github.com"
+	githubAPI = "https://api.github.com"
+)
+
+// errNoImage is a release without the image or without its checksum.
+var errNoImage = errors.New("has no image yet")
 
 // latestRelease is the tag of a repository's latest release, read from the redirect
 // of /releases/latest, so no API token or rate limit is involved.
@@ -54,6 +63,9 @@ func checksum(ctx context.Context, c *http.Client, url, name string) (string, er
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return "", fmt.Errorf("%s: %s: %w", url, resp.Status, errNoImage)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("%s: %s", url, resp.Status)
 	}
@@ -64,12 +76,65 @@ func checksum(ctx context.Context, c *http.Client, url, name string) (string, er
 			return strings.ToLower(f[0]), nil
 		}
 	}
-	return "", fmt.Errorf("%s names no %s", url, name)
+	return "", fmt.Errorf("%s names no %s: %w", url, name, errNoImage)
+}
+
+// imageRelease is the release to install from and its image's checksum: the latest
+// release, or, while that has no image, the newest release before it with one. patina
+// publishes a release first and attaches its images once they passed their boot test,
+// a quarter of an hour later or, when the test fails, not at all.
+func imageRelease(ctx context.Context, c *http.Client, repo, image string) (tag, sum string, err error) {
+	latest, err := latestRelease(ctx, c, repo)
+	if err != nil {
+		return "", "", err
+	}
+	sum, err = checksum(ctx, c, releaseAsset(repo, latest, sumsName), image)
+	if !errors.Is(err, errNoImage) {
+		return latest, sum, err
+	}
+	// GitHub's API, which needs no token for this one request, lists the releases
+	// newest first; /releases/latest skips drafts and pre-releases, and so does this.
+	noImage := fmt.Errorf("patina %s %w. Try again in an hour", latest, errNoImage)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubAPI+"/repos/"+repo+"/releases?per_page=20", nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", "", noImage
+	}
+	defer resp.Body.Close()
+	var releases []struct {
+		Tag        string `json:"tag_name"`
+		Draft      bool   `json:"draft"`
+		Prerelease bool   `json:"prerelease"`
+		Assets     []struct {
+			Name string `json:"name"`
+		} `json:"assets"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&releases) != nil {
+		return "", "", noImage
+	}
+	for _, r := range releases {
+		names := map[string]bool{}
+		for _, a := range r.Assets {
+			names[a.Name] = true
+		}
+		if r.Draft || r.Prerelease || r.Tag == latest || !names[image] || !names[sumsName] {
+			continue
+		}
+		if sum, err := checksum(ctx, c, releaseAsset(repo, r.Tag, sumsName), image); err == nil {
+			return r.Tag, sum, nil
+		}
+	}
+	return "", "", noImage
 }
 
 // download fetches url to dest and checks its SHA-256. It continues a .part file left
-// by an earlier, interrupted run where the server allows. progress gets the bytes so
-// far and the total (0 when unknown).
+// by an earlier, interrupted run where the server allows, and starts over once when
+// the part turns out to be of another file (an older image of the same name).
+// progress gets the bytes so far and the total (0 when unknown).
 func download(ctx context.Context, c *http.Client, url, dest, want string, progress func(done, total int64)) error {
 	part := dest + ".part"
 	h := sha256.New()
@@ -77,6 +142,9 @@ func download(ctx context.Context, c *http.Client, url, dest, want string, progr
 	if f, err := os.Open(part); err == nil {
 		have, _ = io.Copy(h, f)
 		f.Close()
+	}
+	if have > 0 && hex.EncodeToString(h.Sum(nil)) == want {
+		return os.Rename(part, dest) // complete already: the last run stopped before this
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -93,18 +161,25 @@ func download(ctx context.Context, c *http.Client, url, dest, want string, progr
 	flags := os.O_CREATE | os.O_WRONLY
 	switch resp.StatusCode {
 	case http.StatusPartialContent:
+		if !strings.HasPrefix(resp.Header.Get("Content-Range"), fmt.Sprintf("bytes %d-", have)) {
+			resp.Body.Close() // not where the part ends: start over
+			os.Remove(part)
+			return download(ctx, c, url, dest, want, progress)
+		}
 		flags |= os.O_APPEND
 	case http.StatusOK:
 		flags |= os.O_TRUNC
 		have = 0
 		h.Reset()
 	case http.StatusRequestedRangeNotSatisfiable:
-		// The part is complete already, or longer than the file: start over.
+		// The part is longer than the file: start over.
+		resp.Body.Close()
 		os.Remove(part)
 		return download(ctx, c, url, dest, want, progress)
 	default:
 		return fmt.Errorf("%s: %s", url, resp.Status)
 	}
+	resumed := have > 0
 	f, err := os.OpenFile(part, flags, 0o644)
 	if err != nil {
 		return err
@@ -123,6 +198,9 @@ func download(ctx context.Context, c *http.Client, url, dest, want string, progr
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != want {
 		os.Remove(part)
+		if resumed {
+			return download(ctx, c, url, dest, want, progress) // this time from the start
+		}
 		return fmt.Errorf("%s does not match its checksum (got %s, want %s); it was deleted", url, got, want)
 	}
 	return os.Rename(part, dest)

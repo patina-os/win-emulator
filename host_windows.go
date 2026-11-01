@@ -89,15 +89,16 @@ const (
 	qemuImg    = "qemu-img.exe"
 )
 
-// installQEMU installs QEMU with winget; winget asks Windows for permission itself.
-func installQEMU() error {
+// wingetQEMU installs QEMU with winget (verb install) or updates it (upgrade); winget
+// asks Windows for permission itself.
+func wingetQEMU(verb string) error {
 	if _, err := exec.LookPath("winget"); err != nil {
 		return errors.New("winget is not available on this PC; install QEMU from https://qemu.weilnetz.de/w64/ and open Try patina again")
 	}
-	cmd := hidden(exec.Command("winget", "install", "--id", qemuWingetID, "--exact", "--silent",
+	cmd := hidden(exec.Command("winget", verb, "--id", qemuWingetID, "--exact", "--silent",
 		"--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity"))
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("winget could not install QEMU: %v\n%s", err, lastLines(string(out), 5))
+		return fmt.Errorf("winget could not %s QEMU: %v\n%s", verb, err, lastLines(string(out), 5))
 	}
 	return nil
 }
