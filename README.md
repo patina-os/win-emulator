@@ -37,7 +37,9 @@ From then on, `TryPatina.exe` starts patina straight away.
   11.1 or later (the setup offers to update an older one; `winget upgrade
   SoftwareFreedomConservancy.QEMU` does it by hand). patina's login screen offers the
   Plasma X11 session first on this machine, because that is where the clipboard is
-  shared; the Wayland session stays on its session menu.
+  shared; the Wayland session stays on its session menu. Logging in automatically (a
+  checkbox in the installer) starts the Wayland session instead, so leave it off, or
+  log out and pick Plasma (X11).
 - **Full screen and zoom** are in the window's View menu.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
