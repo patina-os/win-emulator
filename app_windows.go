@@ -370,6 +370,7 @@ func (a *app) setup(st State) (done bool, err error) {
 			if fi, serr := os.Stat(filepath.Join(a.dir, diskFile)); serr == nil && fi.Size() >= minInstalledDisk {
 				st.Phase = phaseInstalled
 				a.log.Print("the user says patina is installed")
+				os.Remove(filepath.Join(a.dir, isoName)) // as after an install the launcher saw end
 				return true, st.save(a.dir)
 			}
 			zenity.Info("The virtual disk is almost empty, so patina is not on it yet. The installer opens instead.",
