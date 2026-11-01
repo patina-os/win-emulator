@@ -628,14 +628,19 @@ func (a *app) start(iso string) (reason string, early bool, err error) {
 	return reason, reason == "" && time.Since(started) < 20*time.Second, nil
 }
 
-// freeAddr is a local TCP address no one listens on, for QEMU's QMP socket.
+// freeAddr is a local TCP address no one listens on, for QEMU's QMP socket. It is on
+// 127.0.0.2, which Windows answers as it answers 127.0.0.1: QEMU's user network takes
+// the guest's connections to 10.0.2.2 to the host's 127.0.0.1, so a program in patina
+// could reach QMP there whenever the launcher is not connected (it died, or QEMU has
+// not been answered yet) and control QEMU, which reads and writes Windows' files.
 func freeAddr() string {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "127.0.0.1:4444"
+	for _, host := range []string{"127.0.0.2", "127.0.0.1"} {
+		if l, err := net.Listen("tcp", host+":0"); err == nil {
+			defer l.Close()
+			return l.Addr().String()
+		}
 	}
-	defer l.Close()
-	return l.Addr().String()
+	return "127.0.0.2:4444"
 }
 
 func readFile(p string) string {

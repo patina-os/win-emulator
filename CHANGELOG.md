@@ -29,6 +29,14 @@ All notable changes to Try patina for Windows are documented here. The format fo
 - The note before the installer says to press Enter at patina's boot menu, which
   waits without a timeout; the window stayed at the menu otherwise.
 
+### Security
+
+- QEMU's machine protocol (QMP), which the launcher drives, listens on 127.0.0.2
+  instead of 127.0.0.1. QEMU's user network takes connections from patina to
+  10.0.2.2 to the PC's 127.0.0.1, so a program in patina could take over QEMU, and
+  with it files in Windows, whenever the launcher was not connected to it (after the
+  launcher was ended in Task Manager, for instance).
+
 ## [0.0.2-alpha] - 2026-10-29
 
 The second alpha, for the image of patina 0.1.0-alpha.4.
