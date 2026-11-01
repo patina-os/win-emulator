@@ -468,13 +468,12 @@ func (a *app) setup(st State) (done bool, err error) {
 func (a *app) fetchImage() (iso, tag string, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tag, err = latestRelease(ctx, a.http, patinaRepo)
+	tag, want, err := imageRelease(ctx, a.http, patinaRepo, isoName)
+	if errors.Is(err, errNoImage) {
+		return "", "", err
+	}
 	if err != nil {
 		return "", "", fmt.Errorf("cannot reach patina's releases on GitHub: %w", err)
-	}
-	want, err := checksum(ctx, a.http, releaseAsset(patinaRepo, tag, sumsName), isoName)
-	if err != nil {
-		return "", "", err
 	}
 	iso = filepath.Join(a.dir, isoName)
 	if fileExists(iso) {

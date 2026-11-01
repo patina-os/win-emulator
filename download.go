@@ -7,6 +7,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,8 +16,15 @@ import (
 	"strings"
 )
 
-// github is where releases come from; tests point it at a local server.
-var github = "https://github.com"
+// github is where releases come from, and githubAPI lists them when the latest has no
+// image; tests point both at a local server.
+var (
+	github    = "https://github.com"
+	githubAPI = "https://api.github.com"
+)
+
+// errNoImage is a release without the image or without its checksum.
+var errNoImage = errors.New("has no image yet")
 
 // latestRelease is the tag of a repository's latest release, read from the redirect
 // of /releases/latest, so no API token or rate limit is involved.
@@ -54,6 +63,9 @@ func checksum(ctx context.Context, c *http.Client, url, name string) (string, er
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return "", fmt.Errorf("%s: %s: %w", url, resp.Status, errNoImage)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("%s: %s", url, resp.Status)
 	}
@@ -64,7 +76,59 @@ func checksum(ctx context.Context, c *http.Client, url, name string) (string, er
 			return strings.ToLower(f[0]), nil
 		}
 	}
-	return "", fmt.Errorf("%s names no %s", url, name)
+	return "", fmt.Errorf("%s names no %s: %w", url, name, errNoImage)
+}
+
+// imageRelease is the release to install from and its image's checksum: the latest
+// release, or, while that has no image, the newest release before it with one. patina
+// publishes a release first and attaches its images once they passed their boot test,
+// a quarter of an hour later or, when the test fails, not at all.
+func imageRelease(ctx context.Context, c *http.Client, repo, image string) (tag, sum string, err error) {
+	latest, err := latestRelease(ctx, c, repo)
+	if err != nil {
+		return "", "", err
+	}
+	sum, err = checksum(ctx, c, releaseAsset(repo, latest, sumsName), image)
+	if !errors.Is(err, errNoImage) {
+		return latest, sum, err
+	}
+	// GitHub's API, which needs no token for this one request, lists the releases
+	// newest first; /releases/latest skips drafts and pre-releases, and so does this.
+	noImage := fmt.Errorf("patina %s %w. Try again in an hour", latest, errNoImage)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubAPI+"/repos/"+repo+"/releases?per_page=20", nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", "", noImage
+	}
+	defer resp.Body.Close()
+	var releases []struct {
+		Tag        string `json:"tag_name"`
+		Draft      bool   `json:"draft"`
+		Prerelease bool   `json:"prerelease"`
+		Assets     []struct {
+			Name string `json:"name"`
+		} `json:"assets"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&releases) != nil {
+		return "", "", noImage
+	}
+	for _, r := range releases {
+		names := map[string]bool{}
+		for _, a := range r.Assets {
+			names[a.Name] = true
+		}
+		if r.Draft || r.Prerelease || r.Tag == latest || !names[image] || !names[sumsName] {
+			continue
+		}
+		if sum, err := checksum(ctx, c, releaseAsset(repo, r.Tag, sumsName), image); err == nil {
+			return r.Tag, sum, nil
+		}
+	}
+	return "", "", noImage
 }
 
 // download fetches url to dest and checks its SHA-256. It continues a .part file left

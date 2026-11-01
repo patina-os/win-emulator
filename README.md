@@ -18,8 +18,8 @@ Windows 10 or 11 · x86_64 · hardware virtualization
    time: "More info", then "Run anyway".
 3. **Let it set up.** It installs [QEMU](https://www.qemu.org/) with winget if it is
    missing (Windows asks for permission), downloads patina's installer (about 1 GB)
-   from [patina's releases](https://github.com/patina-os/patina/releases) and checks
-   it against the release's `SHA256SUMS`.
+   from the newest of [patina's releases](https://github.com/patina-os/patina/releases)
+   that has its image and checks it against the release's `SHA256SUMS`.
 4. **Install patina in the window that opens**, as on a PC. Press Enter at the boot
    menu. On the disk page "Erase disk" erases only the virtual disk. When the installer
    is done, patina restarts by itself and its first start sets up its apps, which needs

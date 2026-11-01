@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -40,13 +41,9 @@ func TestDownload(t *testing.T) {
 	fakeGitHub(t)
 	ctx := context.Background()
 	c := http.DefaultClient
-	tag, err := latestRelease(ctx, c, patinaRepo)
+	tag, want, err := imageRelease(ctx, c, patinaRepo, isoName)
 	if err != nil || tag != "v0.1.0-alpha.3" {
-		t.Fatalf("latest release %q, %v", tag, err)
-	}
-	want, err := checksum(ctx, c, releaseAsset(patinaRepo, tag, sumsName), isoName)
-	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("image release %q, %v", tag, err)
 	}
 	dest := filepath.Join(t.TempDir(), isoName)
 	// Half a file left by an interrupted run is continued, not fetched again.
@@ -64,6 +61,57 @@ func TestDownload(t *testing.T) {
 	}
 	if got, _ := fileSHA256(dest); got != want {
 		t.Error("fileSHA256 disagrees with the checksum")
+	}
+}
+
+// releases serves a latest release without an image (published, its images not yet
+// attached) and the API's listing of the ones before it.
+func releases(t *testing.T, listing string) {
+	sum := sha256.Sum256([]byte(fakeImage))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/patina-os/patina/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/patina-os/patina/releases/tag/v0.1.0-alpha.5", http.StatusFound)
+	})
+	mux.HandleFunc("/repos/patina-os/patina/releases", func(w http.ResponseWriter, r *http.Request) {
+		if listing == "" {
+			http.Error(w, "rate limited", http.StatusForbidden)
+			return
+		}
+		w.Write([]byte(listing))
+	})
+	for _, tag := range []string{"v0.1.0-alpha.3", "v0.1.0-alpha.4"} {
+		mux.HandleFunc("/patina-os/patina/releases/download/"+tag+"/SHA256SUMS", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(hex.EncodeToString(sum[:]) + "  " + isoName + "\n"))
+		})
+	}
+	s := httptest.NewServer(mux)
+	t.Cleanup(s.Close)
+	oldWeb, oldAPI := github, githubAPI
+	github, githubAPI = s.URL, s.URL
+	t.Cleanup(func() { github, githubAPI = oldWeb, oldAPI })
+}
+
+func TestImageReleaseFallsBack(t *testing.T) {
+	releases(t, `[
+		{"tag_name": "v0.1.0-alpha.5", "assets": []},
+		{"tag_name": "v0.1.0-alpha.4", "prerelease": true, "assets": [{"name": "SHA256SUMS"}, {"name": "`+isoName+`"}]},
+		{"tag_name": "v0.1.0-alpha.3", "assets": [{"name": "SHA256SUMS"}, {"name": "`+isoName+`"}]},
+		{"tag_name": "v0.1.0-alpha.2", "assets": []}
+	]`)
+	sum := sha256.Sum256([]byte(fakeImage))
+	tag, got, err := imageRelease(context.Background(), http.DefaultClient, patinaRepo, isoName)
+	if err != nil || tag != "v0.1.0-alpha.3" || got != hex.EncodeToString(sum[:]) {
+		t.Errorf("imageRelease = %q, %q, %v; want the newest release with an image that is no pre-release", tag, got, err)
+	}
+}
+
+func TestImageReleaseWithoutAny(t *testing.T) {
+	for _, listing := range []string{"", `[{"tag_name": "v0.1.0-alpha.5", "assets": []}]`} {
+		releases(t, listing)
+		_, _, err := imageRelease(context.Background(), http.DefaultClient, patinaRepo, isoName)
+		if !errors.Is(err, errNoImage) || !strings.Contains(err.Error(), "patina v0.1.0-alpha.5 has no image yet") {
+			t.Errorf("listing %q: %v; want that the latest has no image yet", listing, err)
+		}
 	}
 }
 

@@ -15,6 +15,10 @@ All notable changes to Try patina for Windows are documented here. The format fo
 - patina starts on a PC without a sound device (no speakers or headphones attached):
   QEMU stopped at once there, because DirectSound found nothing to play on. The
   launcher now starts it again without sound.
+- The setup no longer fails with a bare "404 Not Found" while patina's latest release
+  has no image: its images are attached a quarter of an hour after it is published,
+  once they passed their boot test, or not at all when it failed. The launcher then
+  installs the newest release before it that has one.
 
 ## [0.0.2-alpha] - 2026-10-29
 
