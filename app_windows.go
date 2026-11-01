@@ -42,7 +42,9 @@ type app struct {
 	logFile *os.File
 	http    *http.Client
 	qemuDir string
+	qemuVer string // from QEMU's VERSION file, such as 11.1.0
 	accel   string
+	noSound bool // DirectSound found no sound device
 
 	mu    sync.Mutex
 	qmp   *QMP   // the running machine, nil while none runs
@@ -194,7 +196,7 @@ func (a *app) stopFor(after string) {
 
 // checkUpdate shows a menu entry when a newer launcher is released.
 func (a *app) checkUpdate() {
-	if version == "dev" {
+	if strings.HasPrefix(version, "dev") { // a local build, or CI's dev-<commit>
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -222,7 +224,7 @@ func (a *app) run() error {
 			continue
 		}
 		if a.qemuDir == "" {
-			if err := a.prepare(); err != nil {
+			if err := a.prepare(false); err != nil {
 				return err
 			}
 		}
@@ -268,8 +270,9 @@ func (a *app) wipe() error {
 	return nil
 }
 
-// prepare checks the host and finds QEMU, installing it when the user agrees.
-func (a *app) prepare() error {
+// prepare checks the host and finds QEMU, installing it when the user agrees. During
+// the setup it also offers to update a QEMU too old to share the clipboard.
+func (a *app) prepare(setup bool) error {
 	if armHost() {
 		return errors.New("Try patina needs an x86_64 PC: Windows on ARM cannot run patina's x86_64 image in its hypervisor yet")
 	}
@@ -291,30 +294,49 @@ func (a *app) prepare() error {
 		}
 	}
 	a.qemuDir = findQEMU()
-	if a.qemuDir != "" {
+	if a.qemuDir == "" {
+		if err := zenity.Question("Try patina runs patina in QEMU, the free virtual machine. It is not installed yet.\n\n"+
+			"Install it now with winget? Windows asks for permission.",
+			a.opts(zenity.OKLabel("Install QEMU"), zenity.CancelLabel("Quit"), zenity.QuestionIcon)...); err != nil {
+			return zenity.ErrCanceled
+		}
+		if err := a.winget("install", "Installing QEMU with winget…"); err != nil {
+			return err
+		}
+		if a.qemuDir = findQEMU(); a.qemuDir == "" {
+			return errors.New("QEMU was installed, but its files are not under Program Files\\qemu")
+		}
+	}
+	a.qemuVer = strings.TrimSpace(readFile(filepath.Join(a.qemuDir, "VERSION")))
+	a.log.Printf("QEMU %s in %s", a.qemuVer, a.qemuDir)
+	if !setup || versionAtLeast(a.qemuVer, clipboardMajor, clipboardMinor) {
 		return nil
 	}
-	if err := zenity.Question("Try patina runs patina in QEMU, the free virtual machine. It is not installed yet.\n\n"+
-		"Install it now with winget? Windows asks for permission.",
-		a.opts(zenity.OKLabel("Install QEMU"), zenity.CancelLabel("Quit"), zenity.QuestionIcon)...); err != nil {
-		return zenity.ErrCanceled
+	if zenity.Question(fmt.Sprintf("QEMU %s is installed. Copy and paste between Windows and patina needs "+
+		"QEMU %d.%d or later.\n\nUpdate QEMU now with winget? Windows asks for permission.",
+		a.qemuVer, clipboardMajor, clipboardMinor),
+		a.opts(zenity.OKLabel("Update QEMU"), zenity.CancelLabel("Not now"), zenity.QuestionIcon)...) != nil {
+		return nil
 	}
+	if err := a.winget("upgrade", "Updating QEMU with winget…"); err != nil {
+		return err
+	}
+	a.qemuVer = strings.TrimSpace(readFile(filepath.Join(a.qemuDir, "VERSION")))
+	a.log.Printf("QEMU %s after the update", a.qemuVer)
+	return nil
+}
+
+// winget installs QEMU or updates it (verb install or upgrade) behind a progress dialog.
+func (a *app) winget(verb, text string) error {
 	dlg, _ := zenity.Progress(a.opts(zenity.Pulsate(), zenity.NoCancel())...)
 	if dlg != nil {
-		dlg.Text("Installing QEMU with winget…")
+		dlg.Text(text)
 	}
-	err := installQEMU()
+	err := wingetQEMU(verb)
 	if dlg != nil {
 		dlg.Close()
 	}
-	if err != nil {
-		return err
-	}
-	if a.qemuDir = findQEMU(); a.qemuDir == "" {
-		return errors.New("QEMU was installed, but its files are not under Program Files\\qemu")
-	}
-	a.log.Printf("QEMU in %s", a.qemuDir)
-	return nil
+	return err
 }
 
 // setup takes a machine from nothing (or an unfinished install) to patina installed on
@@ -348,6 +370,7 @@ func (a *app) setup(st State) (done bool, err error) {
 			if fi, serr := os.Stat(filepath.Join(a.dir, diskFile)); serr == nil && fi.Size() >= minInstalledDisk {
 				st.Phase = phaseInstalled
 				a.log.Print("the user says patina is installed")
+				os.Remove(filepath.Join(a.dir, isoName)) // as after an install the launcher saw end
 				return true, st.save(a.dir)
 			}
 			zenity.Info("The virtual disk is almost empty, so patina is not on it yet. The installer opens instead.",
@@ -362,7 +385,17 @@ func (a *app) setup(st State) (done bool, err error) {
 	if err != nil {
 		return false, nil
 	}
-	if err := a.prepare(); err != nil {
+	// The machine gets at most three quarters of the host's memory; when that is less
+	// than the installer asks for, it would stop on its first page, after the download
+	// (and before QEMU is installed for nothing).
+	hostMB := hostMemoryMB()
+	if memoryMB, _ := sizing(hostMB, runtime.NumCPU()); memoryMB < installerMemoryMB {
+		zenity.Error(fmt.Sprintf("This PC has %.1f GB of memory. patina's installer needs 3 GB of its own "+
+			"while Windows keeps running, so Try patina needs a PC with more than 4 GB.",
+			float64(hostMB)/1024), a.opts()...)
+		return false, nil
+	}
+	if err := a.prepare(true); err != nil {
 		return false, err
 	}
 	if free := freeBytes(a.dir); free > 0 && free < minFreeSpace {
@@ -390,6 +423,7 @@ func (a *app) setup(st State) (done bool, err error) {
 		return false, err
 	}
 	zenity.Info("patina's installer opens in a window now.\n\n"+
+		"• Press Enter at patina's boot menu; it waits for you.\n"+
 		"• Pick your language, keyboard and account as on a PC. On the disk page, \"Erase disk\" erases "+
 		"only the virtual disk; Windows is not touched.\n"+
 		"• When the installer is done, patina restarts by itself and sets up its apps.\n"+
@@ -446,13 +480,12 @@ func (a *app) setup(st State) (done bool, err error) {
 func (a *app) fetchImage() (iso, tag string, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tag, err = latestRelease(ctx, a.http, patinaRepo)
+	tag, want, err := imageRelease(ctx, a.http, patinaRepo, isoName)
+	if errors.Is(err, errNoImage) {
+		return "", "", err
+	}
 	if err != nil {
 		return "", "", fmt.Errorf("cannot reach patina's releases on GitHub: %w", err)
-	}
-	want, err := checksum(ctx, a.http, releaseAsset(patinaRepo, tag, sumsName), isoName)
-	if err != nil {
-		return "", "", err
 	}
 	iso = filepath.Join(a.dir, isoName)
 	if fileExists(iso) {
@@ -514,10 +547,13 @@ func (a *app) boot(iso string) (string, error) {
 		}
 		tail := lastLines(readFile(filepath.Join(a.dir, qemuLog)), 8)
 		a.log.Printf("QEMU stopped at once with %s:\n%s", a.accel, tail)
+		failure := startFailure(tail)
 		switch {
-		case a.accel == accelWHPX && strings.Contains(strings.ToLower(tail), "whpx"):
+		case failure == failedSound && !a.noSound:
+			a.noSound = true // patina runs without sound rather than not at all
+		case failure == failedHypervisor && a.accel == accelWHPX:
 			a.accel = accelWHPXNoIRQ
-		case a.accel != accelEmulation && strings.Contains(strings.ToLower(tail), "whpx"):
+		case failure == failedHypervisor && a.accel != accelEmulation:
 			if zenity.Question("The Windows Hypervisor Platform refused to run patina:\n\n"+tail+
 				"\n\nRun it without the hypervisor? It is much slower.",
 				a.opts(zenity.OKLabel("Run slowly"), zenity.CancelLabel("Quit"), zenity.WarningIcon)...) != nil {
@@ -534,8 +570,8 @@ func (a *app) boot(iso string) (string, error) {
 // shutdown, which is how a refused accelerator or a bad option shows.
 func (a *app) start(iso string) (reason string, early bool, err error) {
 	memoryMB, cpus := sizing(hostMemoryMB(), runtime.NumCPU())
-	m := Machine{QEMUDir: a.qemuDir, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
-		Accel: a.accel, ISO: iso, QMP: freeAddr()}
+	m := Machine{QEMUDir: a.qemuDir, Version: a.qemuVer, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
+		Accel: a.accel, ISO: iso, QMP: freeAddr(), NoSound: a.noSound}
 	logf, err := os.Create(filepath.Join(a.dir, qemuLog))
 	if err != nil {
 		return "", false, err
@@ -592,14 +628,19 @@ func (a *app) start(iso string) (reason string, early bool, err error) {
 	return reason, reason == "" && time.Since(started) < 20*time.Second, nil
 }
 
-// freeAddr is a local TCP address no one listens on, for QEMU's QMP socket.
+// freeAddr is a local TCP address no one listens on, for QEMU's QMP socket. It is on
+// 127.0.0.2, which Windows answers as it answers 127.0.0.1: QEMU's user network takes
+// the guest's connections to 10.0.2.2 to the host's 127.0.0.1, so a program in patina
+// could reach QMP there whenever the launcher is not connected (it died, or QEMU has
+// not been answered yet) and control QEMU, which reads and writes Windows' files.
 func freeAddr() string {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "127.0.0.1:4444"
+	for _, host := range []string{"127.0.0.2", "127.0.0.1"} {
+		if l, err := net.Listen("tcp", host+":0"); err == nil {
+			defer l.Close()
+			return l.Addr().String()
+		}
 	}
-	defer l.Close()
-	return l.Addr().String()
+	return "127.0.0.2:4444"
 }
 
 func readFile(p string) string {

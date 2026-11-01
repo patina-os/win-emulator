@@ -18,8 +18,10 @@ import (
 type QMP struct {
 	conn    net.Conn
 	mu      sync.Mutex // one command in flight
+	id      int        // of the last command; QEMU repeats it in the reply
 	replies chan qmpMessage
 	events  chan qmpMessage
+	closed  chan struct{} // closed when QEMU closes the connection
 }
 
 type qmpMessage struct {
@@ -31,6 +33,7 @@ type qmpMessage struct {
 		Desc  string `json:"desc"`
 	} `json:"error"`
 	QMP json.RawMessage `json:"QMP"`
+	ID  int             `json:"id"`
 }
 
 // dialQMP connects once QEMU listens (it starts listening a moment after it starts)
@@ -50,7 +53,8 @@ func dialQMP(ctx context.Context, addr string) (*QMP, error) {
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
-	q := &QMP{conn: conn, replies: make(chan qmpMessage, 4), events: make(chan qmpMessage, 16)}
+	q := &QMP{conn: conn, replies: make(chan qmpMessage, 4), events: make(chan qmpMessage, 16),
+		closed: make(chan struct{})}
 	greeting := make(chan error, 1)
 	go q.read(greeting)
 	select {
@@ -74,6 +78,7 @@ func dialQMP(ctx context.Context, addr string) (*QMP, error) {
 // which closes the events channel.
 func (q *QMP) read(greeting chan<- error) {
 	defer close(q.events)
+	defer close(q.closed)
 	s := bufio.NewScanner(q.conn)
 	s.Buffer(make([]byte, 64<<10), 16<<20)
 	first := true
@@ -93,7 +98,10 @@ func (q *QMP) read(greeting chan<- error) {
 		case m.Event != "":
 			q.events <- m // the supervisor reads every event; SHUTDOWN must not get lost
 		default:
-			q.replies <- m
+			select {
+			case q.replies <- m:
+			default: // replies to commands that timed out, which no one waits for
+			}
 		}
 	}
 	if first {
@@ -101,26 +109,41 @@ func (q *QMP) read(greeting chan<- error) {
 	}
 }
 
-// Execute runs one command without arguments and waits for its reply.
+// Execute runs one command without arguments and waits for its reply. It returns at
+// once when QEMU closes the connection, as it does right after quit.
 func (q *QMP) Execute(command string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for len(q.replies) > 0 {
-		<-q.replies // a late reply to a command that timed out
-	}
-	b, _ := json.Marshal(map[string]string{"execute": command})
+	q.id++
+	b, _ := json.Marshal(map[string]any{"execute": command, "id": q.id})
 	q.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if _, err := q.conn.Write(append(b, '\n')); err != nil {
 		return err
 	}
-	select {
-	case m := <-q.replies:
+	result := func(m qmpMessage) error {
 		if m.Error != nil {
 			return fmt.Errorf("%s: %s", command, m.Error.Desc)
 		}
 		return nil
-	case <-time.After(10 * time.Second):
-		return fmt.Errorf("%s: no reply from QEMU", command)
+	}
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case m := <-q.replies:
+			if m.ID == q.id {
+				return result(m)
+			} // else a late reply to a command that timed out
+		case <-q.closed:
+			// The reply may have come just before; read has queued all it got.
+			for len(q.replies) > 0 {
+				if m := <-q.replies; m.ID == q.id {
+					return result(m)
+				}
+			}
+			return fmt.Errorf("%s: QEMU closed its machine protocol", command)
+		case <-timeout:
+			return fmt.Errorf("%s: no reply from QEMU", command)
+		}
 	}
 }
 

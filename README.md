@@ -4,7 +4,7 @@ patina in a window on your Windows PC: a virtual machine that leaves your drive 
 Windows as they are. `TryPatina.exe` sets it up, installs patina from its released
 image, and starts it from then on. Your files in patina stay between sessions.
 
-Windows 10 or 11 · x86_64 · hardware virtualization
+Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memory
 
 ## Get started
 
@@ -18,8 +18,8 @@ Windows 10 or 11 · x86_64 · hardware virtualization
    time: "More info", then "Run anyway".
 3. **Let it set up.** It installs [QEMU](https://www.qemu.org/) with winget if it is
    missing (Windows asks for permission), downloads patina's installer (about 1 GB)
-   from [patina's releases](https://github.com/patina-os/patina/releases) and checks
-   it against the release's `SHA256SUMS`.
+   from the newest of [patina's releases](https://github.com/patina-os/patina/releases)
+   that has its image and checks it against the release's `SHA256SUMS`.
 4. **Install patina in the window that opens**, as on a PC. Press Enter at the boot
    menu. On the disk page "Erase disk" erases only the virtual disk. When the installer
    is done, patina restarts by itself and its first start sets up its apps, which needs
@@ -33,9 +33,13 @@ From then on, `TryPatina.exe` starts patina straight away.
   patina icon in the notification area. The window's close button does nothing, so a
   click cannot cut the power to patina's disk; "Turn off now…" in the icon's menu does,
   when patina hangs.
-- **Copy and paste** of text works both ways between Windows and patina.
-  patina's login screen offers the Plasma X11 session first on this machine, because
-  that is where the clipboard is shared; the Wayland session stays on its session menu.
+- **Copy and paste** of text works both ways between Windows and patina, with QEMU
+  11.1 or later (the setup offers to update an older one; `winget upgrade
+  SoftwareFreedomConservancy.QEMU` does it by hand). patina's login screen offers the
+  Plasma X11 session first on this machine, because that is where the clipboard is
+  shared; the Wayland session stays on its session menu. Logging in automatically (a
+  checkbox in the installer) starts the Wayland session instead, so leave it off, or
+  log out and pick Plasma (X11).
 - **Full screen and zoom** are in the window's View menu.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
@@ -69,11 +73,14 @@ binary but itself:
   `kernel-irqchip=off`, then offers emulation.
 - **The machine** is a q35 PC with UEFI (QEMU's edk2), an NVMe disk (so patina's I/O
   scheduler rules apply as on a laptop), virtio graphics at 1920x1080, a USB tablet,
-  virtio networking, Intel HD audio on DirectSound, half the host's memory (4 to 8 GB)
+  virtio networking, Intel HD audio on DirectSound (none when Windows has no sound
+  device, which QEMU does not start without), half the host's memory (4 to 8 GB)
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the
   set the Windows Hypervisor Platform runs safely in stock QEMU.
 - **Copy and paste** is QEMU's own vdagent (`-chardev qemu-vdagent`) between QEMU's GTK
-  window and `spice-vdagent` in patina; no SPICE viewer is involved.
+  window and `spice-vdagent` in patina; no SPICE viewer is involved. The GTK window
+  shares the Windows clipboard from QEMU 11.1 on, when asked (`-display
+  gtk,clipboard=on`); the Windows builds before it have no clipboard in that window.
 - **patina** comes from its released `patina-amd64.hybrid.iso` and its installer, as
   on a PC (patina's Path B, which runs Path A on first boot). The launcher names the machine
   `Try patina` in its firmware tables (`-smbios type=1,product=Try patina`), and
