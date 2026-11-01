@@ -196,7 +196,7 @@ func (a *app) stopFor(after string) {
 
 // checkUpdate shows a menu entry when a newer launcher is released.
 func (a *app) checkUpdate() {
-	if version == "dev" {
+	if strings.HasPrefix(version, "dev") { // a local build, or CI's dev-<commit>
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
