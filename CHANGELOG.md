@@ -12,6 +12,9 @@ All notable changes to Try patina for Windows are documented here. The format fo
   shares the Windows clipboard with its window only when asked, and the launcher did
   not ask. It does now (`-display gtk,clipboard=on`), and the setup offers to update an
   older QEMU, whose window has no clipboard at all.
+- patina starts on a PC without a sound device (no speakers or headphones attached):
+  QEMU stopped at once there, because DirectSound found nothing to play on. The
+  launcher now starts it again without sound.
 
 ## [0.0.2-alpha] - 2026-10-29
 

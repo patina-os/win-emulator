@@ -18,6 +18,7 @@ type Machine struct {
 	Accel    string // whpx, whpx,kernel-irqchip=off or tcg
 	ISO      string // set for the install run: the image as a CD, and no reboot
 	QMP      string // host:port of the QMP socket the launcher talks to
+	NoSound  bool   // no sound device: DirectSound found none on the host
 }
 
 // The accelerators tried in order: the Windows Hypervisor Platform, then the same
@@ -87,6 +88,10 @@ func (m Machine) Args() []string {
 			"-no-reboot",
 		)
 	}
+	sound := "dsound,id=audio"
+	if m.NoSound {
+		sound = "none,id=audio"
+	}
 	display := "gtk,show-tabs=off,zoom-to-fit=on,window-close=off"
 	if versionAtLeast(m.Version, clipboardMajor, clipboardMinor) {
 		display += ",clipboard=on" // an older QEMU refuses the option and does not start
@@ -103,12 +108,32 @@ func (m Machine) Args() []string {
 		"-device", "virtio-serial-pci",
 		"-chardev", "qemu-vdagent,id=vdagent,name=vdagent,clipboard=on,mouse=off",
 		"-device", "virtserialport,chardev=vdagent,name=com.redhat.spice.0",
-		"-audiodev", "dsound,id=audio",
+		"-audiodev", sound,
 		"-device", "intel-hda",
 		"-device", "hda-duplex,audiodev=audio",
 		"-qmp", "tcp:"+m.QMP+",server=on,wait=off",
 	)
 	return a
+}
+
+// What stopped QEMU as it started, as the end of its log tells: the Windows Hypervisor
+// Platform refused it, or DirectSound found no sound device (a PC with no speakers or
+// headphones attached, a remote session), which QEMU does not start without.
+const (
+	failedOther = iota
+	failedHypervisor
+	failedSound
+)
+
+func startFailure(tail string) int {
+	t := strings.ToLower(tail)
+	switch {
+	case strings.Contains(t, "directsound") || strings.Contains(t, "dsound"):
+		return failedSound
+	case strings.Contains(t, "whpx"):
+		return failedHypervisor
+	}
+	return failedOther
 }
 
 // sizing picks the machine's memory and processors from the host's: half of each,

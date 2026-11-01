@@ -56,6 +56,31 @@ func TestClipboardByVersion(t *testing.T) {
 	}
 }
 
+func TestNoSound(t *testing.T) {
+	m := Machine{QEMUDir: "q", DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: accelWHPX, QMP: "x:1", NoSound: true}
+	a := m.Args()
+	if i := slices.Index(a, "-audiodev"); a[i+1] != "none,id=audio" {
+		t.Errorf("without sound the audio backend is none, got %s", a[i+1])
+	}
+}
+
+func TestStartFailure(t *testing.T) {
+	// What QEMU 11.1 for Windows prints; seen under wine, which has neither.
+	for _, c := range []struct {
+		tail string
+		want int
+	}{
+		{`C:\Program Files\qemu\qemu-system-x86_64w.exe: -accel whpx: Could not load library WinHvPlatform.dll.
+C:\Program Files\qemu\qemu-system-x86_64w.exe: -accel whpx: failed to initialize whpx: Function not implemented`, failedHypervisor},
+		{`C:\Program Files\qemu\qemu-system-x86_64w.exe: Could not initialize DirectSound: No sound driver is available for use, or the given GUID is not a valid DirectSound device ID`, failedSound},
+		{`qemu-system-x86_64w.exe: -drive if=none,id=disk: Could not open 'disk.qcow2': The process cannot access the file because it is being used by another process.`, failedOther},
+	} {
+		if got := startFailure(c.tail); got != c.want {
+			t.Errorf("startFailure(%q) = %d, want %d", c.tail, got, c.want)
+		}
+	}
+}
+
 func TestArgsInstalled(t *testing.T) {
 	m := Machine{QEMUDir: "q", DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: accelEmulation, QMP: "x:1"}
 	a := m.Args()

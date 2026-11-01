@@ -71,7 +71,8 @@ binary but itself:
   `kernel-irqchip=off`, then offers emulation.
 - **The machine** is a q35 PC with UEFI (QEMU's edk2), an NVMe disk (so patina's I/O
   scheduler rules apply as on a laptop), virtio graphics at 1920x1080, a USB tablet,
-  virtio networking, Intel HD audio on DirectSound, half the host's memory (4 to 8 GB)
+  virtio networking, Intel HD audio on DirectSound (none when Windows has no sound
+  device, which QEMU does not start without), half the host's memory (4 to 8 GB)
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the
   set the Windows Hypervisor Platform runs safely in stock QEMU.
 - **Copy and paste** is QEMU's own vdagent (`-chardev qemu-vdagent`) between QEMU's GTK

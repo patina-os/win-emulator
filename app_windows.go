@@ -44,6 +44,7 @@ type app struct {
 	qemuDir string
 	qemuVer string // from QEMU's VERSION file, such as 11.1.0
 	accel   string
+	noSound bool // DirectSound found no sound device
 
 	mu    sync.Mutex
 	qmp   *QMP   // the running machine, nil while none runs
@@ -535,10 +536,13 @@ func (a *app) boot(iso string) (string, error) {
 		}
 		tail := lastLines(readFile(filepath.Join(a.dir, qemuLog)), 8)
 		a.log.Printf("QEMU stopped at once with %s:\n%s", a.accel, tail)
+		failure := startFailure(tail)
 		switch {
-		case a.accel == accelWHPX && strings.Contains(strings.ToLower(tail), "whpx"):
+		case failure == failedSound && !a.noSound:
+			a.noSound = true // patina runs without sound rather than not at all
+		case failure == failedHypervisor && a.accel == accelWHPX:
 			a.accel = accelWHPXNoIRQ
-		case a.accel != accelEmulation && strings.Contains(strings.ToLower(tail), "whpx"):
+		case failure == failedHypervisor && a.accel != accelEmulation:
 			if zenity.Question("The Windows Hypervisor Platform refused to run patina:\n\n"+tail+
 				"\n\nRun it without the hypervisor? It is much slower.",
 				a.opts(zenity.OKLabel("Run slowly"), zenity.CancelLabel("Quit"), zenity.WarningIcon)...) != nil {
@@ -556,7 +560,7 @@ func (a *app) boot(iso string) (string, error) {
 func (a *app) start(iso string) (reason string, early bool, err error) {
 	memoryMB, cpus := sizing(hostMemoryMB(), runtime.NumCPU())
 	m := Machine{QEMUDir: a.qemuDir, Version: a.qemuVer, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
-		Accel: a.accel, ISO: iso, QMP: freeAddr()}
+		Accel: a.accel, ISO: iso, QMP: freeAddr(), NoSound: a.noSound}
 	logf, err := os.Create(filepath.Join(a.dir, qemuLog))
 	if err != nil {
 		return "", false, err
