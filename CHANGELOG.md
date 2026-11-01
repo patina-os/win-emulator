@@ -26,6 +26,8 @@ All notable changes to Try patina for Windows are documented here. The format fo
 - A download stopped before a new patina release came out no longer ends in "does
   not match its checksum": the launcher continued the old image's part with the new
   image. It now starts over by itself when a continued download does not match.
+- The note before the installer says to press Enter at patina's boot menu, which
+  waits without a timeout; the window stayed at the menu otherwise.
 
 ## [0.0.2-alpha] - 2026-10-29
 

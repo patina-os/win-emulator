@@ -422,6 +422,7 @@ func (a *app) setup(st State) (done bool, err error) {
 		return false, err
 	}
 	zenity.Info("patina's installer opens in a window now.\n\n"+
+		"• Press Enter at patina's boot menu; it waits for you.\n"+
 		"• Pick your language, keyboard and account as on a PC. On the disk page, \"Erase disk\" erases "+
 		"only the virtual disk; Windows is not touched.\n"+
 		"• When the installer is done, patina restarts by itself and sets up its apps.\n"+
