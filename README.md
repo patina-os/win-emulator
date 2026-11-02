@@ -32,14 +32,17 @@ From then on, `TryPatina.exe` starts patina straight away.
 - **Closing.** Shut patina down from its own menu, or with "Shut down patina" on the
   patina icon in the notification area. The window's close button does nothing, so a
   click cannot cut the power to patina's disk; "Turn off now…" in the icon's menu does,
-  when patina hangs.
+  when patina hangs. So does QEMU's own Machine → Quit in the window (Ctrl+Alt+Q), at
+  once and without asking, like pulling the plug: patina may lose what it had not
+  saved.
 - **Copy and paste** of text works both ways between Windows and patina, with QEMU
   11.1 or later (the setup offers to update an older one; `winget upgrade
   SoftwareFreedomConservancy.QEMU` does it by hand). patina's login screen offers the
   Plasma X11 session first on this machine, because that is where the clipboard is
   shared; the Wayland session stays on its session menu. Logging in automatically (a
-  checkbox in the installer) starts the Wayland session instead, so leave it off, or
-  log out and pick Plasma (X11).
+  checkbox in the installer) starts Plasma (X11) too, with images after patina
+  0.1.0-alpha.4. One installed from an earlier image logs into Wayland that way: pick
+  Plasma (X11) for it in System Settings → Login Screen (SDDM) → Behavior.
 - **Full screen and zoom** are in the window's View menu.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
