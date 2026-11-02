@@ -8,6 +8,8 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Fixed
 
+- The README says that QEMU's Machine → Quit (Ctrl+Alt+Q) turns patina off at once,
+  like "Turn off now…"; it read as if nothing in the window could.
 - Copy and paste between Windows and patina: QEMU 11.1, the one winget installs,
   shares the Windows clipboard with its window only when asked, and the launcher did
   not ask. It does now (`-display gtk,clipboard=on`), and the setup offers to update an
