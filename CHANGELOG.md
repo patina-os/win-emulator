@@ -24,8 +24,8 @@ All notable changes to Try patina for Windows are documented here. The format fo
 ### Changed
 
 - The setup window shows each answer as a compact row, a radio or a box with its name
-  and what it brings, without the installer's pictures, so it needs much less
-  scrolling.
+  and what it brings, so it needs much less scrolling; only the themes keep their
+  picture from the installer, their palette over their wallpaper.
 - A restart of patina ends QEMU, and the launcher starts it again.
 
 ### Fixed

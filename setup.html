@@ -67,6 +67,10 @@
   .card .tick.box { border-radius: 4px; }
   .card:has(input:checked) .tick { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--bg); }
   .card .text { min-width: 0; }
+  /* A theme shows its picture from the installer's theme page above the row. */
+  .card.picture { display: block; padding: 0; overflow: hidden; }
+  .card.picture img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--bg); }
+  .card.picture .row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; }
   .card strong { display: block; color: var(--bright); font-weight: 600; line-height: 1.3; }
   .card span { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.4; margin-top: 2px; }
   footer {
@@ -182,7 +186,17 @@ function card(page, item, type, checked) {
   const tick = document.createElement("i");
   tick.className = type === "checkbox" ? "tick box" : "tick";
   text.append(strong, span);
-  label.append(input, tick, text);
+  if (page.key === "PATINA_THEME" && item.picture) {
+    label.classList.add("picture");
+    const img = document.createElement("img");
+    img.src = item.picture; img.alt = "";
+    const row = document.createElement("div");
+    row.className = "row";
+    row.append(tick, text);
+    label.append(input, img, row);
+  } else {
+    label.append(input, tick, text);
+  }
   return label;
 }
 
