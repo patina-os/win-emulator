@@ -15,7 +15,10 @@ Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memor
 2. **Download and open `TryPatina.exe`** from the
    [latest release](https://github.com/patina-os/win-emulator/releases/latest), with
    its SHA-256 beside it. It is not signed yet, so Windows SmartScreen warns the first
-   time: "More info", then "Run anyway".
+   time: "More info", then "Run anyway". Microsoft Defender may also take a new release
+   for malware by a machine-learning guess (a name ending in `!ml`) until Microsoft has
+   looked at it; [report it](https://www.microsoft.com/en-us/wdsi/filesubmission) as an
+   incorrect detection, with the release's SHA-256.
 3. **Let it set up.** It installs [QEMU](https://www.qemu.org/) with winget if it is
    missing (Windows asks for permission), then opens its setup window: your name, login
    name and password, the language, keyboard and time zone (taken from Windows), and

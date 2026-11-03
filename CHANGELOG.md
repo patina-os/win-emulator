@@ -23,6 +23,10 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Changed
 
+- TryPatina.exe is built without stripping its symbol tables, about 14 MB instead of
+  10: Microsoft Defender's machine-learning guesses took the stripped file for
+  Trojan:Win32/Bearfoos.A!ml, a known false alarm for stripped Go programs. The README
+  says how to report such a detection.
 - The setup window shows each answer as a compact row, a radio or a box with its name
   and what it brings, so it needs much less scrolling; only the themes keep their
   picture from the installer, their palette over their wallpaper.
