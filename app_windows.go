@@ -259,6 +259,10 @@ func (a *app) run() error {
 		case "remove":
 			return a.removeAll()
 		default:
+			if reason == "" {
+				// The window was closed through Windows, or QEMU crashed: qemu.log may say.
+				a.log.Print("QEMU ended without a shutdown")
+			}
 			if reason != "guest-reset" {
 				return nil
 			}
@@ -660,8 +664,17 @@ func (a *app) createDisk(backing string) error {
 // refuses QEMU it tries again without the in-kernel interrupt controller, then offers
 // emulation.
 func (a *app) boot(iso string) (string, error) {
-	for {
+	for wedges := 1; ; {
 		reason, early, err := a.start(iso)
+		if reason == reasonWedged {
+			if wedges == wedgeRetries {
+				return "", fmt.Errorf("QEMU stopped answering %d times in a row as patina started. "+
+					"Restart Windows and open Try patina again", wedgeRetries)
+			}
+			a.log.Printf("QEMU did not answer on its machine protocol: ending it and starting it again (%d)", wedges)
+			wedges++
+			continue
+		}
 		if err != nil || !early {
 			return reason, err
 		}
@@ -685,6 +698,9 @@ func (a *app) boot(iso string) (string, error) {
 		}
 	}
 }
+
+// reasonWedged is a start that QEMU never answered: it hung, and it was ended.
+const reasonWedged = "wedged"
 
 // start runs QEMU once. early is true when it stopped within seconds without a
 // shutdown, which is how a refused accelerator or a bad option shows.
@@ -736,10 +752,11 @@ func (a *app) start(iso string) (reason string, early bool, err error) {
 		select {
 		case <-exited:
 			return "", true, nil // it stopped before it answered: the log says why
-		default:
+		default: // it hangs, as stock QEMU on the hypervisor can (qmpDelay)
+			a.log.Printf("QEMU's machine protocol: %v", qerr)
 			cmd.Process.Kill()
 			<-exited
-			return "", false, fmt.Errorf("QEMU did not answer on its machine protocol: %w", qerr)
+			return reasonWedged, false, nil
 		}
 	}
 	a.running(q)

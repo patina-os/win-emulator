@@ -30,6 +30,13 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Fixed
 
+- patina's window froze about a minute after it started, more than once in a row: the
+  launcher connected to QEMU's machine protocol ten seconds after the start, which on
+  this machine is the kernel's first seconds, after the firmware and GRUB's menu, and
+  stock QEMU on the Windows Hypervisor Platform can hang for good there. It now waits 45
+  seconds. A QEMU that hangs all the same, and so never answers, is ended and started
+  again, up to three times, instead of the launcher quitting with an error. The
+  launcher's log says when QEMU ended without a shutdown.
 - QEMU's window opened small, at the size of the firmware's first picture, and resizing
   it often froze QEMU: patina took the window's size as its resolution and changed it
   with every resize. patina now runs at 1920x1080 on standard VGA, which the window

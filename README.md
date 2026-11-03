@@ -116,10 +116,11 @@ binary but itself:
   installer's last restart is how it sees that the installer is done.
 - **Two hangs of stock QEMU** on the Windows Hypervisor Platform, found by [Try Omarchy
   for Windows](https://github.com/omacom/try-omarchy-windows/blob/main/docs/FINDINGS.md),
-  are worked around: the launcher connects to QEMU's machine protocol (QMP) only ten
-  seconds after the start, because a connection in the guest's first seconds can freeze
-  the window for good, and it ends a QEMU that is still there fifteen seconds after the
-  guest shut down.
+  are worked around: the launcher connects to QEMU's machine protocol (QMP) only 45
+  seconds after the start, past the firmware, GRUB and the kernel's first seconds,
+  because a connection then can freeze the window for good; it ends a QEMU that never
+  answers and starts it again, up to three times; and it ends a QEMU that is still there
+  fifteen seconds after the guest shut down.
 
 ## Building
 
