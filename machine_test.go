@@ -99,11 +99,27 @@ C:\Program Files\qemu\qemu-system-x86_64w.exe: -accel whpx: failed to initialize
 func TestArgsInstalled(t *testing.T) {
 	m := Machine{QEMUDir: "q", DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: accelEmulation, QMP: "x:1"}
 	a := m.Args()
-	if slices.Contains(a, "-no-reboot") || strings.Contains(strings.Join(a, " "), "media=cdrom") {
-		t.Errorf("an installed machine has no CD and restarts normally: %v", a)
+	joined := strings.Join(a, " ")
+	if !slices.Contains(a, "-no-reboot") || strings.Contains(joined, "media=cdrom") ||
+		slices.Contains(a, "-fw_cfg") || slices.Contains(a, "-serial") {
+		t.Errorf("an installed machine has no CD, no answers and no serial log, and exits on a restart: %v", a)
 	}
 	if i := slices.Index(a, "-cpu"); a[i+1] != cpuEmulation {
 		t.Errorf("emulation uses the max CPU model, got %s", a[i+1])
+	}
+}
+
+func TestArgsSetup(t *testing.T) {
+	m := Machine{QEMUDir: "q", DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: accelWHPX, QMP: "x:1",
+		Setup: `C:\Users\a,b\patina-vm\setup.env`, SerialLog: `C:\Users\a,b\patina-vm\serial.log`}
+	joined := strings.Join(m.Args(), " ")
+	for _, want := range []string{
+		"-fw_cfg name=opt/io.github.patina_os/setup,file=C:\\Users\\a,,b\\patina-vm\\setup.env",
+		"-chardev file,id=serial,path=C:\\Users\\a,,b\\patina-vm\\serial.log -serial chardev:serial",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("args lack %q:\n%s", want, joined)
+		}
 	}
 }
 

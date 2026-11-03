@@ -5,16 +5,24 @@
 // virtual disk, and starts that disk from then on.
 package main
 
+import "time"
+
 // What the launcher uses, in one place. patina's side of the contract is
 // devices/try-patina-windows/ in patina-os/patina: it matches smbiosProduct.
 const (
-	appName       = "Try patina"
-	patinaRepo    = "patina-os/patina"
-	launcherRepo  = "patina-os/win-emulator"
-	isoName       = "patina-amd64.hybrid.iso"
-	sumsName      = "SHA256SUMS"
-	qemuWingetID  = "SoftwareFreedomConservancy.QEMU"
-	smbiosProduct = "Try patina"
+	appName      = "Try patina"
+	patinaRepo   = "patina-os/patina"
+	launcherRepo = "patina-os/win-emulator"
+	isoName      = "patina-amd64.hybrid.iso"
+	sumsName     = "SHA256SUMS"
+	// The ready-made disk (iso/disk/ in patina) and the installer's pages for the setup
+	// window, both release assets beside the image; the first boot reads the answers
+	// under setupFwCfg (devices/try-patina-windows/firstboot/ in patina).
+	diskImageName  = "patina-amd64.qcow2"
+	setupPagesName = "patina-setup.json"
+	setupFwCfg     = "opt/io.github.patina_os/setup"
+	qemuWingetID   = "SoftwareFreedomConservancy.QEMU"
+	smbiosProduct  = "Try patina"
 
 	// The virtual disk grows as the guest writes; this is only its ceiling.
 	diskSize = "128G"
@@ -29,6 +37,15 @@ const (
 	// Free space the first setup asks for: the image, Debian with Plasma and the
 	// default apps (docs/vm-run.md in patina names 40 GB for a test VM).
 	minFreeSpace = 40 << 30
+)
+
+// Stock QEMU on the Windows Hypervisor Platform hangs when its machine protocol is
+// connected to in the guest's first seconds, and when the guest powers off
+// (docs/FINDINGS.md of omacom/try-omarchy-windows): the launcher waits this long before
+// it connects, and ends a QEMU that is still there this long after the guest shut down.
+const (
+	qmpDelay      = 10 * time.Second
+	shutdownGrace = 15 * time.Second
 )
 
 // version is set at build time: -ldflags "-X main.version=v0.1.0".

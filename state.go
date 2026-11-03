@@ -21,7 +21,14 @@ const (
 type State struct {
 	Phase   string `json:"phase"`
 	Release string `json:"release,omitempty"` // the patina release it was installed from
+	Route   string `json:"route,omitempty"`   // routeDisk (the default) or routeInstaller
 }
+
+// How a machine got patina: the ready-made disk, or patina's installer from the image.
+const (
+	routeDisk      = ""
+	routeInstaller = "installer"
+)
 
 // Files in the data directory.
 const (
@@ -31,6 +38,11 @@ const (
 	iconFile  = "patina.ico"
 	qemuLog   = "qemu.log"
 	appLog    = "launcher.log"
+	// The ready-made disk as downloaded: disk.qcow2 keeps only what the guest changed.
+	baseFile = "patina.qcow2"
+	// The setup's answers, the password among them, until the guest set itself up.
+	answersFile = "setup.env"
+	serialLog   = "serial.log"
 )
 
 func loadState(dir string) (State, error) {
