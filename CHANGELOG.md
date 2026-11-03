@@ -6,6 +6,15 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+### Changed
+
+- The Windows key reaches patina while the pointer is over its window, so patina's
+  Meta shortcuts work (Meta+Space searches, Meta alone opens the start menu): QEMU's
+  window takes the keyboard on hover (`grab-on-hover`). Windows kept the key before,
+  and a press whose release it kept left Meta down in patina, so a later Return opened
+  a terminal. Alt+Tab and Windows' own shortcuts work again once the pointer leaves the
+  window, or after Ctrl+Alt+G.
+
 ### Added
 
 - A setup window instead of patina's installer: one page in patina's look asks for your
