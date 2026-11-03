@@ -3,10 +3,12 @@
 <!-- Try patina's setup window (setup.go): what patina's installer asks, asked on Windows.
      Colours, fonts, pages and words come from patina-setup.json, which patina publishes;
      nothing here is fetched from anywhere but the launcher itself. -->
-<html lang="en">
+<html lang="en" translate="no">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The words are patina's own, in English and German: no browser translates them. -->
+<meta name="google" content="notranslate">
 <title>Try patina</title>
 <link rel="icon" href="icon.png">
 <style>
@@ -123,7 +125,7 @@
 "use strict";
 const words = {
   en: {
-    title: "Set up patina", lead: "Answer once; patina then starts and sets itself up.",
+    window: "Try patina", title: "Set up patina", lead: "Answer once; patina then starts and sets itself up.",
     account: "Your account", accountNote: "The name and password you log in to patina with. sudo asks for the same password.",
     fullname: "Your name", user: "Login name", password: "Password", repeat: "Password again",
     region: "Language, keyboard and time zone", regionNote: "Taken from Windows; change them if patina should differ.",
@@ -135,7 +137,7 @@ const words = {
     gone: "Try patina no longer answers; close this window and open Try patina again.",
   },
   de: {
-    title: "patina einrichten", lead: "Einmal beantworten; patina startet dann und richtet sich ein.",
+    window: "Probiere patina auf Windows", title: "patina einrichten", lead: "Einmal beantworten; patina startet dann und richtet sich ein.",
     account: "Dein Konto", accountNote: "Name und Passwort, mit denen du dich bei patina anmeldest. sudo fragt nach demselben Passwort.",
     fullname: "Dein Name", user: "Anmeldename", password: "Passwort", repeat: "Passwort wiederholen",
     region: "Sprache, Tastatur und Zeitzone", regionNote: "Von Windows übernommen; ändere sie, wenn patina abweichen soll.",
@@ -199,6 +201,7 @@ function render(data) {
   if (f.display) css.setProperty("--display", `"${f.display}", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`);
   if (f.monospace) css.setProperty("--mono", `"${f.monospace}", "Cascadia Mono", Consolas, monospace`);
   for (const el of document.querySelectorAll("[data-t]")) el.textContent = t[el.dataset.t];
+  document.title = t.window;
 
   $("fullname").value = d.fullname || "";
   $("user").value = d.user || loginFrom(d.fullname || "");
