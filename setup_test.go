@@ -22,7 +22,7 @@ func testPages(t *testing.T) setupPages {
 	  {"id": "apps", "key": "PATINA_BUNDLES", "mode": "required", "default": "desktop", "labels": {"step": "Apps"},
 	   "items": [{"id": "desktop"}, {"id": "minimal"}]},
 	  {"id": "more", "key": "PATINA_BUNDLES", "mode": "optionalmultiple", "labels": {"step": "More apps"},
-	   "items": [{"id": ""}, {"id": "extras"}, {"id": "artcraft"}]},
+	   "items": [{"id": ""}, {"id": "headstart"}, {"id": "artcraft"}]},
 	  {"id": "theme", "key": "PATINA_THEME", "mode": "required", "default": "aurora", "labels": {"step": "Theme"},
 	   "items": [{"id": "aurora"}, {"id": "datum"}]}]}`), &p)
 	if err != nil {
@@ -34,7 +34,7 @@ func testPages(t *testing.T) setupPages {
 func testAnswers() setupAnswers {
 	return setupAnswers{FullName: "Ada Lovelace", User: "ada", Password: "correct horse", Locale: "de_DE.UTF-8",
 		Keyboard: "de(nodeadkeys)", TimeZone: "Europe/Berlin", Choices: map[string][]string{
-			"agent": {"opencode"}, "ai": {"cloud"}, "apps": {"desktop"}, "more": {"extras", "artcraft"},
+			"agent": {"opencode"}, "ai": {"cloud"}, "apps": {"desktop"}, "more": {"headstart", "artcraft"},
 			"theme": {"datum"}}}
 }
 
@@ -53,7 +53,7 @@ PATINA_KEYBOARD_VARIANT=nodeadkeys
 PATINA_TIMEZONE=Europe/Berlin
 PATINA_AI_AGENT=opencode
 PATINA_AI=cloud
-PATINA_BUNDLES=desktop,extras,artcraft
+PATINA_BUNDLES=desktop,headstart,artcraft
 PATINA_THEME=datum
 `
 	if got := a.env(p); got != want {
@@ -83,7 +83,7 @@ func TestSetupCheck(t *testing.T) {
 		"two themes":      func(a *setupAnswers) { a.Choices["theme"] = []string{"aurora", "datum"} },
 		"no apps":         func(a *setupAnswers) { delete(a.Choices, "apps") },
 		"unknown item":    func(a *setupAnswers) { a.Choices["more"] = []string{"games"} },
-		"twice":           func(a *setupAnswers) { a.Choices["more"] = []string{"extras", "extras"} },
+		"twice":           func(a *setupAnswers) { a.Choices["more"] = []string{"headstart", "headstart"} },
 		"unknown page":    func(a *setupAnswers) { a.Choices["games"] = []string{"chess"} },
 	} {
 		a := testAnswers()
