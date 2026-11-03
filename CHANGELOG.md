@@ -27,6 +27,11 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Fixed
 
+- After an installation with the installer that did not finish, "Start over" (it said
+  "Start over with an empty disk") ran the installer again instead of setting patina up
+  from its ready-made disk, and nothing else led there: "Install patina again…" in the
+  icon's menu is only there while patina runs. Starting over now sets patina up anew
+  the default way. The dialog's question is short enough for its one line.
 - The QEMU window froze ("Not responding") at times: stock QEMU on the Windows
   Hypervisor Platform hangs for good when its machine protocol is connected to in the
   guest's first seconds, which the launcher did at once. It now waits ten seconds. A
