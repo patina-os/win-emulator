@@ -48,6 +48,11 @@ From then on, `TryPatina.exe` starts patina straight away.
   checkbox in the installer) starts Plasma (X11) too, with images after patina
   0.1.0-alpha.4. One installed from an earlier image logs into Wayland that way: pick
   Plasma (X11) for it in System Settings → Login Screen (SDDM) → Behavior.
+- **Keys.** While the pointer is over patina's window, every key goes to patina, the
+  Windows key too: it is patina's Meta (Meta+Space searches, Meta alone opens the start
+  menu, Meta+K shows the keys). Windows' own shortcuts (Alt+Tab, the Windows key's
+  menu) work again once the pointer leaves the window, or after Ctrl+Alt+G, which lets
+  the keyboard go until it is pressed again.
 - **The window** opens at about four fifths of the screen. Resizing it scales patina's
   picture, which stays at 1920x1080; full screen (View menu, or Ctrl+Alt+F) on a 1080p
   monitor shows it pixel for pixel.
@@ -96,7 +101,8 @@ binary but itself:
   controller (some laptops refuse nested virtualization) it retries with
   `kernel-irqchip=off`, then offers emulation.
 - **The machine** is a q35 PC with UEFI (QEMU's edk2), an NVMe disk (so patina's I/O
-  scheduler rules apply as on a laptop), standard VGA at 1920x1080, a USB tablet,
+  scheduler rules apply as on a laptop), standard VGA at 1920x1080 in a window that
+  takes the keyboard while the pointer is over it (`grab-on-hover`), a USB tablet,
   virtio networking, Intel HD audio on DirectSound (none when Windows has no sound
   device, which QEMU does not start without), half the host's memory (4 to 8 GB)
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the

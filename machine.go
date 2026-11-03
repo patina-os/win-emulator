@@ -104,7 +104,11 @@ func (m Machine) Args() []string {
 	if m.NoSound {
 		sound = "none,id=audio"
 	}
-	display := "gtk,show-tabs=off,zoom-to-fit=on,window-close=off"
+	// grab-on-hover: while the pointer is over the window, every key goes to patina, the
+	// Windows key and its chords too (QEMU hooks them on Windows). Otherwise Windows took
+	// the key: Meta+Space and the start menu never reached patina, and a key Windows
+	// kept the release of stayed down there, so a later Return opened a terminal.
+	display := "gtk,show-tabs=off,zoom-to-fit=on,window-close=off,grab-on-hover=on"
 	if versionAtLeast(m.Version, clipboardMajor, clipboardMinor) {
 		display += ",clipboard=on" // an older QEMU refuses the option and does not start
 	}

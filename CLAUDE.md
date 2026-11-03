@@ -37,6 +37,9 @@ and no guest code: what the guest needs is patina's
   and the launcher opens that window at four fifths of the screen (November 2026):
   with virtio graphics patina took the window's size as its resolution, so the window
   stayed as small as the firmware's first picture, and resizing it froze QEMU.
+- The window takes the keyboard while the pointer is over it (`grab-on-hover`), so the
+  Windows key reaches patina as Meta (November 2026): Windows kept it before, patina's
+  Meta shortcuts did not work, and a key whose release Windows kept stayed down.
 - Copy and paste through QEMU's `qemu-vdagent` and the GTK window, with spice-vdagent in
   patina's Plasma X11 session (its Wayland support is not released).
 - Dependencies: `golang.org/x/sys`, `github.com/ncruces/zenity` (dialogs) and
