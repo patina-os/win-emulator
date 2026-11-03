@@ -372,15 +372,16 @@ func (a *app) setup(st State) (done bool, err error) {
 	} else {
 		// The launcher saw no restart by the installer, but the installer may have
 		// finished all the same (it was closed, or the restart went unnoticed), so the
-		// user can say so and start the disk.
+		// user can say so and start the disk. Starting over sets patina up anew the
+		// default way: from the ready-made disk, where the release has one. The text is
+		// short: Windows shows a list dialog's text on one line.
 		const (
 			again     = "Start the installer again"
 			installed = "patina is installed: start it"
-			over      = "Start over with an empty disk"
+			over      = "Start over: set patina up anew"
 		)
 		var choice string
-		choice, err = zenity.List("The installation of patina did not finish last time, as far as Try patina "+
-			"can tell. What now?", []string{again, installed, over},
+		choice, err = zenity.List("The install did not finish. What now?", []string{again, installed, over},
 			a.opts(zenity.DefaultItems(again), zenity.OKLabel("Continue"), zenity.CancelLabel("Not now"),
 				zenity.Width(480), zenity.Height(320))...)
 		switch {
@@ -398,7 +399,7 @@ func (a *app) setup(st State) (done bool, err error) {
 			if err := a.wipe(); err != nil {
 				return false, err
 			}
-			st = State{Route: routeInstaller}
+			st = State{}
 		}
 	}
 	if err != nil {
