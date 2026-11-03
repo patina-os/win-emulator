@@ -54,7 +54,11 @@ type setupItem struct {
 	NameDE        string `json:"name[de]"`
 	Description   string `json:"description"`
 	DescriptionDE string `json:"description[de]"`
-	Picture       string `json:"picture"` // a data: URL, shown for the themes
+	// The note a page of boxes to tick shows in place of its empty item's description,
+	// which tells the installer's users to hold Ctrl for more than one.
+	Note    string `json:"note,omitempty"`
+	NoteDE  string `json:"note[de],omitempty"`
+	Picture string `json:"picture"` // a data: URL, shown for the themes
 }
 
 // setupDefaults is what the page starts with: Windows' language, keyboard and time

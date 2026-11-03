@@ -22,7 +22,8 @@ func testPages(t *testing.T) setupPages {
 	  {"id": "apps", "key": "PATINA_BUNDLES", "mode": "required", "default": "desktop", "labels": {"step": "Apps"},
 	   "items": [{"id": "desktop"}, {"id": "minimal"}]},
 	  {"id": "more", "key": "PATINA_BUNDLES", "mode": "optionalmultiple", "labels": {"step": "More apps"},
-	   "items": [{"id": ""}, {"id": "headstart"}, {"id": "artcraft"}]},
+	   "items": [{"id": "", "description": "Hold Ctrl.", "note": "Tick any.", "note[de]": "Kreuze an."},
+	     {"id": "headstart"}, {"id": "artcraft"}]},
 	  {"id": "theme", "key": "PATINA_THEME", "mode": "required", "default": "aurora", "labels": {"step": "Theme"},
 	   "items": [{"id": "aurora"}, {"id": "datum"}]}]}`), &p)
 	if err != nil {
@@ -115,6 +116,12 @@ func TestSetupServer(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&served)
 	if len(served.Pages) != 5 || served.Defaults.User != "ada" {
 		t.Errorf("setup.json: %+v", served)
+	}
+	// the page shows the more-apps note, which the installer's description is not
+	if len(served.Pages) == 5 {
+		if it := served.Pages[3].Items[0]; it.Note != "Tick any." || it.NoteDE != "Kreuze an." {
+			t.Errorf("the more-apps page's note is lost: %+v", it)
+		}
 	}
 	post := func(a setupAnswers) int {
 		b, _ := json.Marshal(a)
