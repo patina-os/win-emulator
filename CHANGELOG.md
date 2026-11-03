@@ -23,10 +23,16 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Changed
 
+- The setup window shows each answer as a compact row, a radio or a box with its name
+  and what it brings, so it needs much less scrolling; only the themes keep their
+  picture from the installer, their palette over their wallpaper.
 - A restart of patina ends QEMU, and the launcher starts it again.
 
 ### Fixed
 
+- The setup window in German is titled "Probiere patina auf Windows", and no browser
+  translates it: Edge's translator turned its title into "Probier mal Patina" and its
+  words, already German, into others ("Dein-Name").
 - After an installation with the installer that did not finish, "Start over" (it said
   "Start over with an empty disk") ran the installer again instead of setting patina up
   from its ready-made disk, and nothing else led there: "Install patina again…" in the

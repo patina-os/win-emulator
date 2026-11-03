@@ -81,8 +81,9 @@ binary but itself:
 - **The setup window** is one page in patina's look, served by the launcher on
   `127.0.0.1` under a random path and shown by Microsoft Edge as an app window (Edge
   draws WebView2 too; with a profile of its own, deleted afterwards), or by the default
-  browser where Edge was removed. Its pages, words, pictures, colours and fonts are
-  patina's: the release's `patina-setup.json`, the installer's own pages.
+  browser where Edge was removed. Its pages, words, colours and fonts are patina's: the
+  release's `patina-setup.json`, the installer's own pages, each answer a compact row
+  and each theme with its picture.
 
 - **QEMU** is the official Windows build (`SoftwareFreedomConservancy.QEMU` in winget,
   from [qemu.weilnetz.de](https://qemu.weilnetz.de/)), on the Windows Hypervisor

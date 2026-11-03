@@ -29,9 +29,10 @@ and no guest code: what the guest needs is patina's
   Installing from the ISO with the installer stays, from the menu and for a release
   without the disk.
 - The setup window is one HTML page served on 127.0.0.1 under a random path and shown
-  in an Edge app window, or the default browser without Edge; its pages, words,
-  pictures, colours and fonts come from the release's `patina-setup.json`. No WebView2
-  library: the Go ones embed Microsoft's loader DLL or exit the program on an error.
+  in an Edge app window, or the default browser without Edge; its pages, words, colours
+  and fonts come from the release's `patina-setup.json`, each answer a compact row and
+  only the themes with their pictures (November 2026). No WebView2 library: the Go ones
+  embed Microsoft's loader DLL or exit the program on an error.
 - Copy and paste through QEMU's `qemu-vdagent` and the GTK window, with spice-vdagent in
   patina's Plasma X11 session (its Wayland support is not released).
 - Dependencies: `golang.org/x/sys`, `github.com/ncruces/zenity` (dialogs) and

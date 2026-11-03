@@ -54,7 +54,7 @@ type setupItem struct {
 	NameDE        string `json:"name[de]"`
 	Description   string `json:"description"`
 	DescriptionDE string `json:"description[de]"`
-	Picture       string `json:"picture"` // a data: URL
+	Picture       string `json:"picture"` // a data: URL, shown for the themes
 }
 
 // setupDefaults is what the page starts with: Windows' language, keyboard and time
