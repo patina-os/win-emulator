@@ -713,6 +713,7 @@ func (a *app) start(iso string) (reason string, early bool, err error) {
 		cmd.Wait()
 		close(exited)
 	}()
+	go placeWindow(cmd.Process.Pid, exited)
 	select {
 	case <-exited:
 		return "", true, nil // it stopped before the launcher looked: the log says why

@@ -109,7 +109,11 @@ func (m Machine) Args() []string {
 		display += ",clipboard=on" // an older QEMU refuses the option and does not start
 	}
 	a = append(a,
-		"-device", "virtio-vga,xres=1920,yres=1080",
+		// Standard VGA at one resolution, which the window scales (zoom-to-fit). With
+		// virtio graphics patina took the window's size as its resolution: the window
+		// stayed as small as it opened, and resizing it froze QEMU on Windows. 64 MB
+		// holds a few 1920x1080 frames, as a compositor keeps them.
+		"-device", "VGA,xres=1920,yres=1080,vgamem_mb=64",
 		"-display", display,
 		"-device", "qemu-xhci",
 		"-device", "usb-tablet",

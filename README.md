@@ -45,7 +45,9 @@ From then on, `TryPatina.exe` starts patina straight away.
   checkbox in the installer) starts Plasma (X11) too, with images after patina
   0.1.0-alpha.4. One installed from an earlier image logs into Wayland that way: pick
   Plasma (X11) for it in System Settings → Login Screen (SDDM) → Behavior.
-- **Full screen and zoom** are in the window's View menu.
+- **The window** opens at about four fifths of the screen. Resizing it scales patina's
+  picture, which stays at 1920x1080; full screen (View menu, or Ctrl+Alt+F) on a 1080p
+  monitor shows it pixel for pixel.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
 - **Starting over.** "Install patina again…" deletes the virtual disk and asks the
@@ -91,7 +93,7 @@ binary but itself:
   controller (some laptops refuse nested virtualization) it retries with
   `kernel-irqchip=off`, then offers emulation.
 - **The machine** is a q35 PC with UEFI (QEMU's edk2), an NVMe disk (so patina's I/O
-  scheduler rules apply as on a laptop), virtio graphics at 1920x1080, a USB tablet,
+  scheduler rules apply as on a laptop), standard VGA at 1920x1080, a USB tablet,
   virtio networking, Intel HD audio on DirectSound (none when Windows has no sound
   device, which QEMU does not start without), half the host's memory (4 to 8 GB)
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the

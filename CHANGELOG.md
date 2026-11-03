@@ -30,6 +30,10 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Fixed
 
+- QEMU's window opened small, at the size of the firmware's first picture, and resizing
+  it often froze QEMU: patina took the window's size as its resolution and changed it
+  with every resize. patina now runs at 1920x1080 on standard VGA, which the window
+  only scales, and the window opens at about four fifths of the screen, centred.
 - The setup window in German is titled "Probiere patina auf Windows", and no browser
   translates it: Edge's translator turned its title into "Probier mal Patina" and its
   words, already German, into others ("Dein-Name").

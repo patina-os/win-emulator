@@ -33,6 +33,10 @@ and no guest code: what the guest needs is patina's
   and fonts come from the release's `patina-setup.json`, each answer a compact row and
   only the themes with their pictures (November 2026). No WebView2 library: the Go ones
   embed Microsoft's loader DLL or exit the program on an error.
+- The display is standard VGA at one resolution, 1920x1080, which QEMU's window scales,
+  and the launcher opens that window at four fifths of the screen (November 2026):
+  with virtio graphics patina took the window's size as its resolution, so the window
+  stayed as small as the firmware's first picture, and resizing it froze QEMU.
 - Copy and paste through QEMU's `qemu-vdagent` and the GTK window, with spice-vdagent in
   patina's Plasma X11 session (its Wayland support is not released).
 - Dependencies: `golang.org/x/sys`, `github.com/ncruces/zenity` (dialogs) and
