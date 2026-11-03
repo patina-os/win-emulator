@@ -23,6 +23,10 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Changed
 
+- TryPatina.exe is built without stripping its symbol tables, about 14 MB instead of
+  10: Microsoft Defender's machine-learning guesses took the stripped file for
+  Trojan:Win32/Bearfoos.A!ml, a known false alarm for stripped Go programs. The README
+  says how to report such a detection.
 - The setup window shows each answer as a compact row, a radio or a box with its name
   and what it brings, so it needs much less scrolling; only the themes keep their
   picture from the installer, their palette over their wallpaper.
@@ -30,6 +34,17 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Fixed
 
+- patina's window froze about a minute after it started, more than once in a row: the
+  launcher connected to QEMU's machine protocol ten seconds after the start, which on
+  this machine is the kernel's first seconds, after the firmware and GRUB's menu, and
+  stock QEMU on the Windows Hypervisor Platform can hang for good there. It now waits 45
+  seconds. A QEMU that hangs all the same, and so never answers, is ended and started
+  again, up to three times, instead of the launcher quitting with an error. The
+  launcher's log says when QEMU ended without a shutdown.
+- QEMU's window opened small, at the size of the firmware's first picture, and resizing
+  it often froze QEMU: patina took the window's size as its resolution and changed it
+  with every resize. patina now runs at 1920x1080 on standard VGA, which the window
+  only scales, and the window opens at about four fifths of the screen, centred.
 - The setup window in German is titled "Probiere patina auf Windows", and no browser
   translates it: Edge's translator turned its title into "Probier mal Patina" and its
   words, already German, into others ("Dein-Name").

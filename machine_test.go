@@ -21,7 +21,8 @@ func TestArgsInstallRun(t *testing.T) {
 		"ide-cd,drive=cd,bus=ide.0,bootindex=0",
 		"qemu-vdagent,id=vdagent,name=vdagent,clipboard=on",
 		"virtserialport,chardev=vdagent,name=com.redhat.spice.0",
-		"window-close=off",
+		"window-close=off", "zoom-to-fit=on",
+		"-device VGA,xres=1920,yres=1080", // one resolution, which the window scales
 		"-qmp tcp:127.0.0.1:4444,server=on,wait=off",
 	} {
 		if !strings.Contains(joined, want) {

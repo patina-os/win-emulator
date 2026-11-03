@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -121,4 +123,61 @@ func open(target string) {
 	verb, _ := windows.UTF16PtrFromString("open")
 	t, _ := windows.UTF16PtrFromString(target)
 	windows.ShellExecute(0, verb, t, nil, nil, windows.SW_SHOWNORMAL)
+}
+
+// QEMU's window, found among the top-level windows by its process.
+var (
+	windowPID   uint32
+	windowFound windows.HWND
+	windowsOnce sync.Once
+	windowEnum  uintptr
+)
+
+// placeWindow gives QEMU's window, once it shows, four fifths of its screen's work area,
+// centred: GTK opens it at the size of the firmware's first small picture and, zooming
+// to fit, keeps whatever size it has. It gives up after a while, or when QEMU ends.
+func placeWindow(pid int, gone <-chan struct{}) {
+	windowsOnce.Do(func() {
+		windowEnum = windows.NewCallback(func(h windows.HWND, _ uintptr) uintptr {
+			var p uint32
+			windows.GetWindowThreadProcessId(h, &p)
+			if p == windowPID && windows.IsWindowVisible(h) {
+				windowFound = h
+				return 0 // found: stop
+			}
+			return 1
+		})
+	})
+	var hwnd windows.HWND
+	for range 100 {
+		select {
+		case <-gone:
+			return
+		case <-time.After(200 * time.Millisecond):
+		}
+		windowPID, windowFound = uint32(pid), 0
+		windows.EnumWindows(windowEnum, nil)
+		if hwnd = windowFound; hwnd != 0 {
+			break
+		}
+	}
+	if hwnd == 0 {
+		return
+	}
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	monitor, _, _ := user32.NewProc("MonitorFromWindow").Call(uintptr(hwnd), 2) // MONITOR_DEFAULTTONEAREST
+	var info struct {
+		Size          uint32
+		Monitor, Work windows.Rect
+		Flags         uint32
+	}
+	info.Size = uint32(unsafe.Sizeof(info))
+	if ok, _, _ := user32.NewProc("GetMonitorInfoW").Call(monitor, uintptr(unsafe.Pointer(&info))); ok == 0 {
+		return
+	}
+	workW, workH := info.Work.Right-info.Work.Left, info.Work.Bottom-info.Work.Top
+	w, h := workW*4/5, workH*4/5
+	x, y := info.Work.Left+(workW-w)/2, info.Work.Top+(workH-h)/2
+	const flags = 0x0004 | 0x0010 // SWP_NOZORDER | SWP_NOACTIVATE
+	user32.NewProc("SetWindowPos").Call(uintptr(hwnd), 0, uintptr(x), uintptr(y), uintptr(w), uintptr(h), flags)
 }

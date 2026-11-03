@@ -15,7 +15,10 @@ Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memor
 2. **Download and open `TryPatina.exe`** from the
    [latest release](https://github.com/patina-os/win-emulator/releases/latest), with
    its SHA-256 beside it. It is not signed yet, so Windows SmartScreen warns the first
-   time: "More info", then "Run anyway".
+   time: "More info", then "Run anyway". Microsoft Defender may also take a new release
+   for malware by a machine-learning guess (a name ending in `!ml`) until Microsoft has
+   looked at it; [report it](https://www.microsoft.com/en-us/wdsi/filesubmission) as an
+   incorrect detection, with the release's SHA-256.
 3. **Let it set up.** It installs [QEMU](https://www.qemu.org/) with winget if it is
    missing (Windows asks for permission), then opens its setup window: your name, login
    name and password, the language, keyboard and time zone (taken from Windows), and
@@ -45,7 +48,9 @@ From then on, `TryPatina.exe` starts patina straight away.
   checkbox in the installer) starts Plasma (X11) too, with images after patina
   0.1.0-alpha.4. One installed from an earlier image logs into Wayland that way: pick
   Plasma (X11) for it in System Settings → Login Screen (SDDM) → Behavior.
-- **Full screen and zoom** are in the window's View menu.
+- **The window** opens at about four fifths of the screen. Resizing it scales patina's
+  picture, which stays at 1920x1080; full screen (View menu, or Ctrl+Alt+F) on a 1080p
+  monitor shows it pixel for pixel.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
 - **Starting over.** "Install patina again…" deletes the virtual disk and asks the
@@ -91,7 +96,7 @@ binary but itself:
   controller (some laptops refuse nested virtualization) it retries with
   `kernel-irqchip=off`, then offers emulation.
 - **The machine** is a q35 PC with UEFI (QEMU's edk2), an NVMe disk (so patina's I/O
-  scheduler rules apply as on a laptop), virtio graphics at 1920x1080, a USB tablet,
+  scheduler rules apply as on a laptop), standard VGA at 1920x1080, a USB tablet,
   virtio networking, Intel HD audio on DirectSound (none when Windows has no sound
   device, which QEMU does not start without), half the host's memory (4 to 8 GB)
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the
@@ -114,10 +119,11 @@ binary but itself:
   installer's last restart is how it sees that the installer is done.
 - **Two hangs of stock QEMU** on the Windows Hypervisor Platform, found by [Try Omarchy
   for Windows](https://github.com/omacom/try-omarchy-windows/blob/main/docs/FINDINGS.md),
-  are worked around: the launcher connects to QEMU's machine protocol (QMP) only ten
-  seconds after the start, because a connection in the guest's first seconds can freeze
-  the window for good, and it ends a QEMU that is still there fifteen seconds after the
-  guest shut down.
+  are worked around: the launcher connects to QEMU's machine protocol (QMP) only 45
+  seconds after the start, past the firmware, GRUB and the kernel's first seconds,
+  because a connection then can freeze the window for good; it ends a QEMU that never
+  answers and starts it again, up to three times; and it ends a QEMU that is still there
+  fifteen seconds after the guest shut down.
 
 ## Building
 

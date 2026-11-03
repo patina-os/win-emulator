@@ -42,10 +42,14 @@ const (
 // Stock QEMU on the Windows Hypervisor Platform hangs when its machine protocol is
 // connected to in the guest's first seconds, and when the guest powers off
 // (docs/FINDINGS.md of omacom/try-omarchy-windows): the launcher waits this long before
-// it connects, and ends a QEMU that is still there this long after the guest shut down.
+// it connects, past the firmware, GRUB's five seconds and the kernel's start (Try
+// Omarchy's 10 s are for a kernel QEMU starts at once), ends a QEMU that is still there
+// shutdownGrace after the guest shut down, and starts one that never answered again,
+// up to wedgeRetries times.
 const (
-	qmpDelay      = 10 * time.Second
+	qmpDelay      = 45 * time.Second
 	shutdownGrace = 15 * time.Second
+	wedgeRetries  = 3
 )
 
 // version is set at build time: -ldflags "-X main.version=v0.1.0".

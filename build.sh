@@ -31,7 +31,9 @@ go run "github.com/tc-hib/go-winres@$winres_version" simply \
   --copyright "GPL-3.0-or-later, the patina contributors" --original-filename TryPatina.exe
 
 mkdir -p dist
+# Not stripped (no -s -w): a stripped Go program looks packed to Microsoft Defender's
+# machine-learning guesses, which took TryPatina.exe for Trojan:Win32/Bearfoos.A!ml.
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
-  -ldflags "-H windowsgui -s -w -X main.version=$version" -o dist/TryPatina.exe .
+  -ldflags "-H windowsgui -X main.version=$version" -o dist/TryPatina.exe .
 (cd dist && sha256sum TryPatina.exe > TryPatina.exe.sha256)
 echo "build: dist/TryPatina.exe ($version)"
