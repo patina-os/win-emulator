@@ -6,7 +6,32 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+### Added
+
+- A setup window instead of patina's installer: one page in patina's look asks for your
+  name, login name and password, the language, keyboard and time zone (taken from
+  Windows), and what patina's installer asks on a PC (the apps, more apps, the AI agent
+  and the theme), with the installer's own words and pictures. The launcher then
+  downloads patina's ready-made disk (`patina-amd64.qcow2`, from patina 0.1.0-alpha.5
+  on) and starts it; its first start sets up your account and its apps. The installer
+  no longer runs in the virtual machine, where it had to fetch Plasma through QEMU's
+  network for half an hour and lost the connection twice in a row.
+- "Install with patina's installer…" in the icon's menu installs from patina's ISO
+  with the installer, as before; the launcher takes that route by itself for a release
+  without the disk.
+- `serial.log` in the data folder: what patina's first start reports.
+
+### Changed
+
+- A restart of patina ends QEMU, and the launcher starts it again.
+
 ### Fixed
+
+- The QEMU window froze ("Not responding") at times: stock QEMU on the Windows
+  Hypervisor Platform hangs for good when its machine protocol is connected to in the
+  guest's first seconds, which the launcher did at once. It now waits ten seconds. A
+  QEMU that hangs after patina shut down, as stock QEMU also does there, is ended
+  fifteen seconds later. Both were found by Try Omarchy for Windows.
 
 - The README says that QEMU's Machine → Quit (Ctrl+Alt+Q) turns patina off at once,
   like "Turn off now…"; it read as if nothing in the window could.

@@ -50,7 +50,7 @@ type app struct {
 	qmp   *QMP   // the running machine, nil while none runs
 	after string // what follows when the machine has stopped: "", "reset" or "remove"
 
-	status, shutdown, forceOff, folder, reset, remove, update, about *systray.MenuItem
+	status, shutdown, forceOff, folder, reset, installer, remove, update, about *systray.MenuItem
 }
 
 func newApp() (*app, error) {
@@ -101,6 +101,8 @@ func (a *app) onReady() {
 	systray.AddSeparator()
 	a.folder = systray.AddMenuItem("Open the data folder", "The virtual disk and the logs")
 	a.reset = systray.AddMenuItem("Install patina again…", "Deletes the virtual disk and installs patina anew")
+	a.installer = systray.AddMenuItem("Install with patina's installer…",
+		"Deletes the virtual disk and installs patina from its image with the installer, as on a PC")
 	a.remove = systray.AddMenuItem("Remove patina from this PC…", "Deletes the virtual disk and the data folder")
 	systray.AddSeparator()
 	a.update = systray.AddMenuItem("", "")
@@ -125,7 +127,7 @@ func (a *app) running(q *QMP) {
 	a.mu.Lock()
 	a.qmp = q
 	a.mu.Unlock()
-	for _, m := range []*systray.MenuItem{a.shutdown, a.forceOff, a.reset, a.remove} {
+	for _, m := range []*systray.MenuItem{a.shutdown, a.forceOff, a.reset, a.installer, a.remove} {
 		if q != nil {
 			m.Enable()
 		} else {
@@ -169,6 +171,12 @@ func (a *app) menu() {
 				"files, apps and settings. Windows is not touched.",
 				a.opts(zenity.OKLabel("Delete and install"), zenity.CancelLabel("Keep patina"), zenity.WarningIcon)...) == nil {
 				a.stopFor("reset")
+			}
+		case <-a.installer.ClickedCh:
+			if zenity.Question("Delete patina's virtual disk and install patina with its installer instead, as on "+
+				"a PC? Everything in it is lost: files, apps and settings. Windows is not touched.",
+				a.opts(zenity.OKLabel("Delete and install"), zenity.CancelLabel("Keep patina"), zenity.WarningIcon)...) == nil {
+				a.stopFor("installer")
 			}
 		case <-a.remove.ClickedCh:
 			if zenity.Question("Remove patina from this PC? This deletes the virtual disk with everything in it, and "+
@@ -228,7 +236,8 @@ func (a *app) run() error {
 				return err
 			}
 		}
-		if _, err := a.boot(""); err != nil {
+		reason, err := a.boot("")
+		if err != nil {
 			return err
 		}
 		a.mu.Lock()
@@ -240,10 +249,20 @@ func (a *app) run() error {
 			if err := a.wipe(); err != nil {
 				return err
 			}
+		case "installer":
+			if err := a.wipe(); err != nil {
+				return err
+			}
+			if err := (State{Route: routeInstaller}).save(a.dir); err != nil {
+				return err
+			}
 		case "remove":
 			return a.removeAll()
 		default:
-			return nil
+			if reason != "guest-reset" {
+				return nil
+			}
+			a.log.Print("patina restarted: starting it again") // a restart is an exit (Machine.Args)
 		}
 	}
 }
@@ -261,7 +280,7 @@ func (a *app) removeAll() error {
 
 // wipe deletes the machine but keeps the logs, so the next run sets up anew.
 func (a *app) wipe() error {
-	for _, f := range []string{diskFile, varsFile, stateFile} {
+	for _, f := range []string{diskFile, varsFile, stateFile, answersFile} {
 		if err := os.Remove(filepath.Join(a.dir, f)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -344,9 +363,9 @@ func (a *app) winget(verb, text string) error {
 func (a *app) setup(st State) (done bool, err error) {
 	if st.Phase == phaseNew {
 		err = zenity.Question("Try patina runs patina in a window, next to Windows, without changing your "+
-			"drive.\n\nThe setup installs QEMU if it is missing, downloads patina's installer (about 1 GB) "+
-			"and runs it on a virtual disk. patina then sets up its apps on its first start, which "+
-			"takes a while and needs the internet.\n\n"+
+			"drive.\n\nThe setup installs QEMU if it is missing, asks for your account, downloads patina "+
+			"(about 2 GB) and starts it on a virtual disk. patina then sets up its apps on its first start, "+
+			"which takes a while and needs the internet.\n\n"+
 			fmt.Sprintf("Keep about %d GB free on this drive: the virtual disk grows as patina uses it.", minFreeSpace>>30),
 			a.opts(zenity.OKLabel("Set up patina"), zenity.CancelLabel("Not now"), zenity.QuestionIcon,
 				zenity.Width(460))...)
@@ -379,7 +398,7 @@ func (a *app) setup(st State) (done bool, err error) {
 			if err := a.wipe(); err != nil {
 				return false, err
 			}
-			st = State{}
+			st = State{Route: routeInstaller}
 		}
 	}
 	if err != nil {
@@ -405,6 +424,14 @@ func (a *app) setup(st State) (done bool, err error) {
 			return false, nil
 		}
 	}
+	if st.Phase == phaseNew && st.Route == routeDisk {
+		done, err := a.setupDisk()
+		if !errors.Is(err, errNoImage) {
+			return done, err
+		}
+		a.log.Printf("%v: installing with patina's installer", err)
+		st.Route = routeInstaller
+	}
 
 	iso, tag, err := a.fetchImage()
 	if err != nil {
@@ -414,11 +441,11 @@ func (a *app) setup(st State) (done bool, err error) {
 		return false, err
 	}
 	if st.Phase == phaseNew || !fileExists(filepath.Join(a.dir, diskFile)) {
-		if err := a.createDisk(); err != nil {
+		if err := a.createDisk(""); err != nil {
 			return false, err
 		}
 	}
-	st = State{Phase: phaseInstalling, Release: tag}
+	st = State{Phase: phaseInstalling, Release: tag, Route: routeInstaller}
 	if err := st.save(a.dir); err != nil {
 		return false, err
 	}
@@ -458,6 +485,11 @@ func (a *app) setup(st State) (done bool, err error) {
 			return false, err
 		}
 		return a.setup(State{})
+	case "installer":
+		if err := a.wipe(); err != nil {
+			return false, err
+		}
+		return a.setup(State{Route: routeInstaller})
 	case "remove":
 		return false, a.removeAll()
 	}
@@ -478,9 +510,7 @@ func (a *app) setup(st State) (done bool, err error) {
 // fetchImage downloads the latest patina image, or keeps the one downloaded already
 // when it still matches the release's checksum.
 func (a *app) fetchImage() (iso, tag string, err error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	tag, want, err := imageRelease(ctx, a.http, patinaRepo, isoName)
+	tag, want, err := imageRelease(context.Background(), a.http, patinaRepo, isoName)
 	if errors.Is(err, errNoImage) {
 		return "", "", err
 	}
@@ -488,15 +518,49 @@ func (a *app) fetchImage() (iso, tag string, err error) {
 		return "", "", fmt.Errorf("cannot reach patina's releases on GitHub: %w", err)
 	}
 	iso = filepath.Join(a.dir, isoName)
-	if fileExists(iso) {
-		if got, _ := fileSHA256(iso); got == want {
-			return iso, tag, nil
+	return iso, tag, a.fetch(tag, isoName, iso, map[string]string{isoName: want})
+}
+
+// fetch downloads a release's file to dest behind a progress dialog, or keeps the file
+// there when it matches its checksum in sums already. A file in parts (see parts) comes
+// part by part and is joined. context.Canceled when the user stops it.
+func (a *app) fetch(tag, name, dest string, sums map[string]string) error {
+	want := sums[name]
+	if fileExists(dest) {
+		if got, _ := fileSHA256(dest); got == want {
+			return nil
 		}
-		os.Remove(iso)
+		os.Remove(dest)
 	}
+	pieces := parts(sums, name)
+	if len(pieces) == 0 {
+		return a.fetchOne(tag, name, dest, want, "")
+	}
+	var paths []string
+	for i, p := range pieces {
+		path := filepath.Join(filepath.Dir(dest), p)
+		if err := a.fetchOne(tag, p, path, sums[p], fmt.Sprintf(" (part %d of %d)", i+1, len(pieces))); err != nil {
+			return err
+		}
+		paths = append(paths, path)
+	}
+	return joinParts(dest, paths, want)
+}
+
+// fetchOne downloads one file of a release, unless it is there already; which says which
+// part it is, for the dialog.
+func (a *app) fetchOne(tag, name, dest, want, which string) error {
+	if fileExists(dest) {
+		if got, _ := fileSHA256(dest); got == want {
+			return nil
+		}
+		os.Remove(dest)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	dlg, err := zenity.Progress(a.opts(zenity.MaxValue(1000), zenity.TimeRemaining(), zenity.Width(420))...)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	defer dlg.Close()
 	go func() {
@@ -506,30 +570,85 @@ func (a *app) fetchImage() (iso, tag string, err error) {
 		case <-ctx.Done():
 		}
 	}()
-	dlg.Text("Downloading patina " + tag + "…")
+	dlg.Text("Downloading patina " + tag + which + "…")
 	var last time.Time
-	err = download(ctx, a.http, releaseAsset(patinaRepo, tag, isoName), iso, want, func(done, total int64) {
+	err = download(ctx, a.http, releaseAsset(patinaRepo, tag, name), dest, want, func(done, total int64) {
 		if time.Since(last) < 250*time.Millisecond || total == 0 {
 			return
 		}
 		last = time.Now()
 		dlg.Value(int(done * 1000 / total))
-		dlg.Text(fmt.Sprintf("Downloading patina %s… %d of %d MB", tag, done>>20, total>>20))
+		dlg.Text(fmt.Sprintf("Downloading patina %s%s… %d of %d MB", tag, which, done>>20, total>>20))
 	})
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	dlg.Complete()
-	a.log.Printf("downloaded %s %s, checksum %s", isoName, tag, want)
-	return iso, tag, nil
+	a.log.Printf("downloaded %s %s, checksum %s", name, tag, want)
+	return nil
 }
 
-// createDisk makes the empty virtual disk and the UEFI variables beside it.
-func (a *app) createDisk() error {
+// setupDisk sets patina up from the ready-made disk: the setup window's answers, the
+// disk downloaded, a layer over it for the guest's changes, and the answers left for its
+// first start. errNoImage when the release has no such disk; then the installer does it.
+func (a *app) setupDisk() (bool, error) {
+	ctx := context.Background()
+	tag, sums, err := releaseFiles(ctx, a.http, patinaRepo, diskImageName, setupPagesName)
+	if errors.Is(err, errNoImage) {
+		return false, err
+	}
+	if err != nil {
+		return false, fmt.Errorf("cannot reach patina's releases on GitHub: %w", err)
+	}
+	var pages setupPages
+	if err := fetchJSON(ctx, a.http, releaseAsset(patinaRepo, tag, setupPagesName), sums[setupPagesName], &pages); err != nil {
+		return false, fmt.Errorf("cannot read patina's setup pages: %w", err)
+	}
+	answers, err := a.askSetup(pages)
+	if errors.Is(err, errSetupCanceled) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	base := filepath.Join(a.dir, baseFile)
+	if err := a.fetch(tag, diskImageName, base, sums); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := a.createDisk(base); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(filepath.Join(a.dir, answersFile), []byte(answers.env(pages)), 0o600); err != nil {
+		return false, err
+	}
+	if err := (State{Phase: phaseInstalled, Release: tag}).save(a.dir); err != nil {
+		return false, err
+	}
+	a.log.Printf("patina %s is set up from its disk for %s", tag, answers.User)
+	zenity.Info("patina starts now in a window.\n\n"+
+		"• On its first start it sets up the account and then its apps, which it downloads: that takes a "+
+		"while, and the login screen comes after it.\n"+
+		"• sudo asks for the password you gave in the setup.\n"+
+		"• The window's View menu has full screen and zoom. To close patina, shut it down from its own "+
+		"menu or from Try patina's icon in the notification area.",
+		a.opts(zenity.OKLabel("Start patina"), zenity.InfoIcon, zenity.Width(460))...)
+	return true, nil
+}
+
+// createDisk makes the virtual disk and the UEFI variables beside it: empty, for the
+// installer, or a layer over the ready-made disk (backing), which keeps only what the
+// guest changes and is as large as the disk below it.
+func (a *app) createDisk(backing string) error {
 	disk := filepath.Join(a.dir, diskFile)
 	os.Remove(disk)
-	out, err := hidden(exec.Command(filepath.Join(a.qemuDir, qemuImg), "create", "-q", "-f", "qcow2", disk, diskSize)).
-		CombinedOutput()
+	args := []string{"create", "-q", "-f", "qcow2", disk, diskSize}
+	if backing != "" {
+		args = []string{"create", "-q", "-f", "qcow2", "-b", backing, "-F", "qcow2", disk}
+	}
+	out, err := hidden(exec.Command(filepath.Join(a.qemuDir, qemuImg), args...)).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("qemu-img could not create the disk: %v %s", err, out)
 	}
@@ -571,7 +690,10 @@ func (a *app) boot(iso string) (string, error) {
 func (a *app) start(iso string) (reason string, early bool, err error) {
 	memoryMB, cpus := sizing(hostMemoryMB(), runtime.NumCPU())
 	m := Machine{QEMUDir: a.qemuDir, Version: a.qemuVer, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
-		Accel: a.accel, ISO: iso, QMP: freeAddr(), NoSound: a.noSound}
+		Accel: a.accel, ISO: iso, QMP: freeAddr(), NoSound: a.noSound, SerialLog: filepath.Join(a.dir, serialLog)}
+	if answers := filepath.Join(a.dir, answersFile); fileExists(answers) {
+		m.Setup = answers
+	}
 	logf, err := os.Create(filepath.Join(a.dir, qemuLog))
 	if err != nil {
 		return "", false, err
@@ -590,6 +712,14 @@ func (a *app) start(iso string) (reason string, early bool, err error) {
 		cmd.Wait()
 		close(exited)
 	}()
+	select {
+	case <-exited:
+		return "", true, nil // it stopped before the launcher looked: the log says why
+	case <-time.After(qmpDelay): // the machine protocol, connected to sooner, can hang QEMU
+	}
+	if m.Setup != "" {
+		go a.forgetAnswers(m.Setup, m.SerialLog, exited)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	go func() {
 		select {
@@ -620,12 +750,47 @@ func (a *app) start(iso string) (reason string, early bool, err error) {
 		if e.Event == "SHUTDOWN" {
 			reason = shutdownReason(e)
 			a.log.Printf("shutdown: %s", reason)
+			go func() { // stock QEMU can hang there instead of exiting (qmpDelay)
+				select {
+				case <-exited:
+				case <-time.After(shutdownGrace):
+					a.log.Printf("QEMU is still there %s after the shutdown: ending it", shutdownGrace)
+					cmd.Process.Kill()
+				}
+			}()
 		}
 	}
 	q.Close()
 	<-exited
 	a.running(nil)
 	return reason, reason == "" && time.Since(started) < 20*time.Second, nil
+}
+
+// forgetAnswers deletes the setup's answers, the password among them, once the guest
+// says on its serial port that it set itself up with them (patina's
+// devices/try-patina-windows/firstboot/), or the machine stopped after saying so. QEMU
+// keeps what it read for as long as it runs; a machine stopped before the guest got that
+// far gets them again at its next start.
+func (a *app) forgetAnswers(answers, serial string, exited <-chan struct{}) {
+	done := func() bool { return strings.Contains(readFile(serial), "patina vm setup: done") }
+	tick := time.NewTicker(3 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-exited:
+			if !done() {
+				return
+			}
+		case <-tick.C:
+			if !done() {
+				continue
+			}
+		}
+		if err := os.Remove(answers); err == nil {
+			a.log.Print("patina set itself up; the setup's answers are deleted")
+		}
+		return
+	}
 }
 
 // freeAddr is a local TCP address no one listens on, for QEMU's QMP socket. It is on

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -89,6 +90,72 @@ func releases(t *testing.T, listing string) {
 	oldWeb, oldAPI := github, githubAPI
 	github, githubAPI = s.URL, s.URL
 	t.Cleanup(func() { github, githubAPI = oldWeb, oldAPI })
+}
+
+func TestReleaseFilesAndPages(t *testing.T) {
+	pages := `{"theme": "aurora", "pages": [{"id": "theme", "key": "PATINA_THEME"}]}`
+	sum := sha256.Sum256([]byte(pages))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/patina-os/patina/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/patina-os/patina/releases/tag/v0.1.0-alpha.5", http.StatusFound)
+	})
+	mux.HandleFunc("/patina-os/patina/releases/download/v0.1.0-alpha.5/SHA256SUMS", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "%s  %s\n%s  %s\n", strings.Repeat("a", 64), diskImageName, hex.EncodeToString(sum[:]), setupPagesName)
+	})
+	mux.HandleFunc("/patina-os/patina/releases/download/v0.1.0-alpha.5/"+setupPagesName, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(pages))
+	})
+	s := httptest.NewServer(mux)
+	t.Cleanup(s.Close)
+	oldGitHub, oldAPI := github, githubAPI
+	github, githubAPI = s.URL, s.URL // the API lists no releases here
+	t.Cleanup(func() { github, githubAPI = oldGitHub, oldAPI })
+	ctx := context.Background()
+	tag, sums, err := releaseFiles(ctx, http.DefaultClient, patinaRepo, diskImageName, setupPagesName)
+	if err != nil || tag != "v0.1.0-alpha.5" || sums[diskImageName] != strings.Repeat("a", 64) {
+		t.Fatalf("release files: %q %v %v", tag, sums, err)
+	}
+	var p setupPages
+	if err := fetchJSON(ctx, http.DefaultClient, releaseAsset(patinaRepo, tag, setupPagesName), sums[setupPagesName], &p); err != nil || p.Theme != "aurora" {
+		t.Errorf("pages: %+v, %v", p, err)
+	}
+	if err := fetchJSON(ctx, http.DefaultClient, releaseAsset(patinaRepo, tag, setupPagesName), sums[diskImageName], &p); err == nil {
+		t.Error("a file with another checksum is accepted")
+	}
+	// A release without the disk image is one without the files asked for.
+	if _, _, err := releaseFiles(ctx, http.DefaultClient, patinaRepo, diskImageName, isoName); !errors.Is(err, errNoImage) {
+		t.Errorf("a missing file: %v", err)
+	}
+}
+
+func TestParts(t *testing.T) {
+	dir := t.TempDir()
+	whole := []byte("one part, then another")
+	sum := sha256.Sum256(whole)
+	sums := map[string]string{"disk": hex.EncodeToString(sum[:]), "disk.001": "x", "disk.002": "y", "disk.004": "z"}
+	names := parts(sums, "disk")
+	if len(names) != 2 || names[1] != "disk.002" {
+		t.Fatalf("parts: %v", names) // .004 without .003 is not one of them
+	}
+	if len(parts(map[string]string{"disk": "x"}, "disk")) != 0 {
+		t.Error("a file in one piece has parts")
+	}
+	var paths []string
+	for i, piece := range [][]byte{whole[:9], whole[9:]} {
+		p := filepath.Join(dir, names[i])
+		os.WriteFile(p, piece, 0o644)
+		paths = append(paths, p)
+	}
+	dest := filepath.Join(dir, "disk")
+	if err := joinParts(dest, paths, "0000"); err == nil || fileExists(dest) {
+		t.Error("parts that join to another file are accepted")
+	}
+	if err := joinParts(dest, paths, sums["disk"]); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(dest); string(b) != string(whole) || fileExists(paths[0]) {
+		t.Errorf("joined %q, parts left: %v", b, fileExists(paths[0]))
+	}
 }
 
 func TestImageReleaseFallsBack(t *testing.T) {

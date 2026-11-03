@@ -1,8 +1,8 @@
 # Try patina for Windows
 
 patina in a window on your Windows PC: a virtual machine that leaves your drive and
-Windows as they are. `TryPatina.exe` sets it up, installs patina from its released
-image, and starts it from then on. Your files in patina stay between sessions.
+Windows as they are. `TryPatina.exe` asks for your account, downloads patina's released
+disk, and starts it from then on. Your files in patina stay between sessions.
 
 Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memory
 
@@ -17,13 +17,15 @@ Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memor
    its SHA-256 beside it. It is not signed yet, so Windows SmartScreen warns the first
    time: "More info", then "Run anyway".
 3. **Let it set up.** It installs [QEMU](https://www.qemu.org/) with winget if it is
-   missing (Windows asks for permission), downloads patina's installer (about 1 GB)
-   from the newest of [patina's releases](https://github.com/patina-os/patina/releases)
-   that has its image and checks it against the release's `SHA256SUMS`.
-4. **Install patina in the window that opens**, as on a PC. Press Enter at the boot
-   menu. On the disk page "Erase disk" erases only the virtual disk. When the installer
-   is done, patina restarts by itself and its first start sets up its apps, which needs
-   the internet and takes a while.
+   missing (Windows asks for permission), then opens its setup window: your name, login
+   name and password, the language, keyboard and time zone (taken from Windows), and
+   what patina's installer asks on a PC: the apps, more apps, the AI agent and the
+   theme.
+4. **Wait for patina's first start.** The launcher downloads patina's disk (about
+   2 GB) from the newest of [patina's releases](https://github.com/patina-os/patina/releases)
+   that has it, checks it against the release's `SHA256SUMS` and starts it. Its first
+   start sets up your account and then its apps, which needs the internet and takes a
+   while; the login screen comes after it.
 
 From then on, `TryPatina.exe` starts patina straight away.
 
@@ -46,13 +48,20 @@ From then on, `TryPatina.exe` starts patina straight away.
 - **Full screen and zoom** are in the window's View menu.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
-- **Starting over.** "Install patina again…" deletes the virtual disk and runs the
-  installer of the latest release. "Remove patina from this PC…" deletes the data
-  folder; QEMU stays installed, remove it under Settings, Apps.
+- **Starting over.** "Install patina again…" deletes the virtual disk and asks the
+  setup again; the downloaded disk is used again unless a newer release has another.
+  "Install with patina's installer…" deletes it and installs from patina's
+  `patina-amd64.hybrid.iso` with the installer instead, as on a PC: press Enter at the
+  boot menu, and "Erase disk" on the disk page erases only the virtual disk. The
+  launcher takes that route by itself for a release without the disk. "Remove patina
+  from this PC…" deletes the data folder; QEMU stays installed, remove it under
+  Settings, Apps.
 
-Everything lives in `%LOCALAPPDATA%\patina-vm`: the virtual disk (`disk.qcow2`, which
-grows as patina uses it), its UEFI variables, `launcher.log` and `qemu.log`. Keep about
-40 GB free on that drive.
+Everything lives in `%LOCALAPPDATA%\patina-vm`: patina's disk as downloaded
+(`patina.qcow2`), the machine's own disk over it (`disk.qcow2`, which keeps what
+patina changes and grows as patina uses it), its UEFI variables, `launcher.log`,
+`qemu.log` and `serial.log`, where patina's first start reports. Keep about 40 GB free
+on that drive.
 
 ## What it is not
 
@@ -69,6 +78,12 @@ libraries: [zenity](https://github.com/ncruces/zenity) for its dialogs and
 [systray](https://github.com/fyne-io/systray) for its icon. It owns no image and no
 binary but itself:
 
+- **The setup window** is one page in patina's look, served by the launcher on
+  `127.0.0.1` under a random path and shown by Microsoft Edge as an app window (Edge
+  draws WebView2 too; with a profile of its own, deleted afterwards), or by the default
+  browser where Edge was removed. Its pages, words, pictures, colours and fonts are
+  patina's: the release's `patina-setup.json`, the installer's own pages.
+
 - **QEMU** is the official Windows build (`SoftwareFreedomConservancy.QEMU` in winget,
   from [qemu.weilnetz.de](https://qemu.weilnetz.de/)), on the Windows Hypervisor
   Platform (`-accel whpx`). When the hypervisor refuses the in-kernel interrupt
@@ -84,14 +99,24 @@ binary but itself:
   window and `spice-vdagent` in patina; no SPICE viewer is involved. The GTK window
   shares the Windows clipboard from QEMU 11.1 on, when asked (`-display
   gtk,clipboard=on`); the Windows builds before it have no clipboard in that window.
-- **patina** comes from its released `patina-amd64.hybrid.iso` and its installer, as
-  on a PC (patina's Path B, which runs Path A on first boot). The launcher names the machine
+- **patina** comes from its released `patina-amd64.qcow2`: the system patina's
+  installer leaves on a disk, without an account. The machine's own disk is a layer
+  over it. The setup's answers reach patina once, as QEMU firmware configuration
+  (`-fw_cfg name=opt/io.github.patina_os/setup`); its first start sets the account up
+  from them and runs `patina install`, then says so on the serial port, and the
+  launcher deletes the answers, the password among them. The launcher names the machine
   `Try patina` in its firmware tables (`-smbios type=1,product=Try patina`), and
   patina's [`devices/try-patina-windows/`](https://github.com/patina-os/patina/tree/main/devices/try-patina-windows)
-  takes it from there: spice-vdagent and the X11 session first.
-- **The install run** boots the image with `-no-reboot`: the installer's restart ends
-  QEMU, the launcher reads the reason from QMP (`guest-reset`), takes the image out and
-  starts the installed system.
+  takes it from there: that first-start step, spice-vdagent and the X11 session first.
+- **Restarts are exits** (`-no-reboot`): stock QEMU on the Windows Hypervisor Platform
+  hangs in a guest's reset, so the launcher starts the machine again itself. The
+  installer's last restart is how it sees that the installer is done.
+- **Two hangs of stock QEMU** on the Windows Hypervisor Platform, found by [Try Omarchy
+  for Windows](https://github.com/omacom/try-omarchy-windows/blob/main/docs/FINDINGS.md),
+  are worked around: the launcher connects to QEMU's machine protocol (QMP) only ten
+  seconds after the start, because a connection in the guest's first seconds can freeze
+  the window for good, and it ends a QEMU that is still there fifteen seconds after the
+  guest shut down.
 
 ## Building
 

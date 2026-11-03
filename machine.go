@@ -16,9 +16,13 @@ type Machine struct {
 	MemoryMB int
 	CPUs     int
 	Accel    string // whpx, whpx,kernel-irqchip=off or tcg
-	ISO      string // set for the install run: the image as a CD, and no reboot
+	ISO      string // set for the installer's run: patina's image as a CD
 	QMP      string // host:port of the QMP socket the launcher talks to
 	NoSound  bool   // no sound device: DirectSound found none on the host
+	// Setup is the file of the setup's answers, handed to the guest as QEMU firmware
+	// configuration (setupFwCfg) until it has set itself up; empty after.
+	Setup     string
+	SerialLog string // where the guest's first serial port writes, empty for nowhere
 }
 
 // The accelerators tried in order: the Windows Hypervisor Platform, then the same
@@ -80,13 +84,21 @@ func (m Machine) Args() []string {
 		"-device", "nvme,drive=disk,serial=patina,bootindex=1",
 	}
 	if m.ISO != "" {
-		// The installer ends with a restart; -no-reboot turns it into an exit, so the
-		// launcher can take the CD out and start the installed system.
 		a = append(a,
 			"-drive", "if=none,id=cd,media=cdrom,readonly=on,file="+qemuPath(m.ISO),
 			"-device", "ide-cd,drive=cd,bus=ide.0,bootindex=0",
-			"-no-reboot",
 		)
+	}
+	// A restart of the guest is an exit, and the launcher starts the machine again: stock
+	// QEMU on the Windows Hypervisor Platform hangs in a guest's reset (docs/FINDINGS.md
+	// of omacom/try-omarchy-windows), and the installer's last restart tells the launcher
+	// to take the CD out.
+	a = append(a, "-no-reboot")
+	if m.Setup != "" {
+		a = append(a, "-fw_cfg", "name="+setupFwCfg+",file="+qemuPath(m.Setup))
+	}
+	if m.SerialLog != "" {
+		a = append(a, "-chardev", "file,id=serial,path="+qemuPath(m.SerialLog), "-serial", "chardev:serial")
 	}
 	sound := "dsound,id=audio"
 	if m.NoSound {
