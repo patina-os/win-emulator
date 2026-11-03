@@ -22,7 +22,7 @@ Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memor
    what patina's installer asks on a PC: the apps, more apps, the AI agent and the
    theme.
 4. **Wait for patina's first start.** The launcher downloads patina's disk (about
-   2 GB) from the newest of [patina's releases](https://github.com/patina-os/patina/releases)
+   4 GB, in two parts) from the newest of [patina's releases](https://github.com/patina-os/patina/releases)
    that has it, checks it against the release's `SHA256SUMS` and starts it. Its first
    start sets up your account and then its apps, which needs the internet and takes a
    while; the login screen comes after it.

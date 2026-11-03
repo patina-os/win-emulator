@@ -364,7 +364,7 @@ func (a *app) setup(st State) (done bool, err error) {
 	if st.Phase == phaseNew {
 		err = zenity.Question("Try patina runs patina in a window, next to Windows, without changing your "+
 			"drive.\n\nThe setup installs QEMU if it is missing, asks for your account, downloads patina "+
-			"(about 2 GB) and starts it on a virtual disk. patina then sets up its apps on its first start, "+
+			"(about 4 GB) and starts it on a virtual disk. patina then sets up its apps on its first start, "+
 			"which takes a while and needs the internet.\n\n"+
 			fmt.Sprintf("Keep about %d GB free on this drive: the virtual disk grows as patina uses it.", minFreeSpace>>30),
 			a.opts(zenity.OKLabel("Set up patina"), zenity.CancelLabel("Not now"), zenity.QuestionIcon,
