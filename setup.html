@@ -46,9 +46,14 @@
     font: 15px var(--ui); color: var(--bright); background: var(--raised);
     border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; width: 100%;
   }
-  input:focus-visible, select:focus-visible, button:focus-visible, .card:focus-within {
+  /* A card's ring is for the keyboard only: a click on it already shows the pick, and a
+     second ring round the picked border looked like a mistake. */
+  input:focus-visible, select:focus-visible, button:focus-visible, .card:has(input:focus-visible) {
     outline: 2px solid var(--accent2); outline-offset: 2px;
   }
+  input::placeholder { color: var(--muted); opacity: .7; }
+  /* the field an answer is missing in, until it is typed into */
+  input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--error); }
   /* The installer's answers as compact rows: a radio or a box, the name, one line or two
      of what it brings. */
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
@@ -64,8 +69,14 @@
     flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%;
     border: 2px solid var(--muted); background: var(--bg);
   }
-  .card .tick.box { border-radius: 4px; }
+  .card .tick.box { border-radius: 4px; position: relative; }
   .card:has(input:checked) .tick { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--bg); }
+  /* a ticked box shows its tick, as boxes do everywhere else */
+  .card:has(input:checked) .tick.box { box-shadow: none; }
+  .card:has(input:checked) .tick.box::after {
+    content: ""; position: absolute; left: 3.5px; top: 0.5px; width: 3px; height: 7px;
+    border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg);
+  }
   .card .text { min-width: 0; }
   /* A theme shows its picture from the installer's theme page above the row. */
   .card.picture { display: block; padding: 0; overflow: hidden; }
@@ -103,7 +114,7 @@
       <div class="fields pairs">
         <label class="field"><span data-t="fullname"></span><input id="fullname" maxlength="100"></label>
         <label class="field"><span data-t="user"></span><input id="user" maxlength="32" spellcheck="false"></label>
-        <label class="field"><span data-t="password"></span><input id="password" type="password"></label>
+        <label class="field"><span data-t="password"></span><input id="password" type="password" data-p="atLeast"></label>
         <label class="field"><span data-t="repeat"></span><input id="repeat" type="password"></label>
       </div>
     </section>
@@ -130,25 +141,31 @@
 const words = {
   en: {
     window: "Try patina", title: "Set up patina", lead: "Answer once; patina then starts and sets itself up.",
-    account: "Your account", accountNote: "The name and password you log in to patina with. sudo asks for the same password.",
+    account: "Your account", accountNote: "The name and password you log in to patina with. patina asks for the same password before it changes the system.",
     fullname: "Your name", user: "Login name", password: "Password", repeat: "Password again",
+    atLeast: "At least 8 characters",
     region: "Language, keyboard and time zone", regionNote: "Taken from Windows; change them if patina should differ.",
     locale: "Language", keyboard: "Keyboard", timezone: "Time zone",
     cancel: "Cancel", go: "Set up patina",
     short: "The password needs at least 8 characters.", differ: "The two passwords differ.",
     noUser: "Pick a login name.", sending: "One moment…",
+    badUser: "The login name takes small letters, digits, - and _, and starts with a letter.",
+    badZone: "The time zone is a name such as Europe/Berlin.",
     done: "Done. patina starts in a window of its own; you can close this one.",
     gone: "Try patina no longer answers; close this window and open Try patina again.",
   },
   de: {
     window: "Probiere patina auf Windows", title: "patina einrichten", lead: "Einmal beantworten; patina startet dann und richtet sich ein.",
-    account: "Dein Konto", accountNote: "Name und Passwort, mit denen du dich bei patina anmeldest. sudo fragt nach demselben Passwort.",
+    account: "Dein Konto", accountNote: "Name und Passwort, mit denen du dich bei patina anmeldest. patina fragt nach demselben Passwort, bevor es das System ändert.",
     fullname: "Dein Name", user: "Anmeldename", password: "Passwort", repeat: "Passwort wiederholen",
+    atLeast: "Mindestens 8 Zeichen",
     region: "Sprache, Tastatur und Zeitzone", regionNote: "Von Windows übernommen; ändere sie, wenn patina abweichen soll.",
     locale: "Sprache", keyboard: "Tastatur", timezone: "Zeitzone",
     cancel: "Abbrechen", go: "patina einrichten",
     short: "Das Passwort braucht mindestens 8 Zeichen.", differ: "Die beiden Passwörter unterscheiden sich.",
     noUser: "Wähle einen Anmeldenamen.", sending: "Einen Moment …",
+    badUser: "Der Anmeldename besteht aus Kleinbuchstaben, Ziffern, - und _ und beginnt mit einem Buchstaben.",
+    badZone: "Die Zeitzone ist ein Name wie Europe/Berlin.",
     done: "Fertig. patina startet in einem eigenen Fenster; dieses kannst du schließen.",
     gone: "Try patina antwortet nicht mehr; schließe dieses Fenster und öffne Try patina erneut.",
   },
@@ -213,6 +230,7 @@ function render(data) {
   if (f.display) css.setProperty("--display", `"${f.display}", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`);
   if (f.monospace) css.setProperty("--mono", `"${f.monospace}", "Cascadia Mono", Consolas, monospace`);
   for (const el of document.querySelectorAll("[data-t]")) el.textContent = t[el.dataset.t];
+  for (const el of document.querySelectorAll("[data-p]")) el.placeholder = t[el.dataset.p];
   document.title = t.window;
 
   $("fullname").value = d.fullname || "";
@@ -235,7 +253,8 @@ function render(data) {
     for (const item of page.items) {
       if (multiple && item.id === "") { // "nothing more": the page's note, not a choice
         const note = document.createElement("p");
-        note.className = "note"; note.textContent = pick(item, "description");
+        // note: the description without the installer's "hold Ctrl", which boxes need not
+        note.className = "note"; note.textContent = pick(item, "note") || pick(item, "description");
         section.append(note);
         continue;
       }
@@ -270,12 +289,32 @@ function answers() {
   };
 }
 
+// A missing or wrong answer: its field is marked, brought into view and focused, and the
+// footer says what is wrong, so the answer is fixed where it is, not searched for.
+function wrong(id, text) {
+  const field = $(id);
+  field.setAttribute("aria-invalid", "true");
+  field.scrollIntoView({ block: "center", behavior: "smooth" });
+  field.focus({ preventScroll: true });
+  say(text);
+}
+for (const id of ["user", "password", "repeat", "timezone"]) {
+  $(id).addEventListener("input", () => {
+    if ($(id).getAttribute("aria-invalid")) { $(id).removeAttribute("aria-invalid"); say(""); }
+  });
+}
+
 $("setup").addEventListener("submit", async (event) => {
   event.preventDefault();
   const a = answers();
-  if (!a.user) return say(t.noUser);
-  if ([...a.password].length < 8) return say(t.short);
-  if (a.password !== $("repeat").value) return say(t.differ);
+  // the launcher's own checks (setupAnswers.check), so the page can say where
+  if (!a.user) return wrong("user", t.noUser);
+  if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(a.user) || a.user === "root" || a.user === "live") {
+    return wrong("user", t.badUser);
+  }
+  if ([...a.password].length < 8) return wrong("password", t.short);
+  if (a.password !== $("repeat").value) return wrong("repeat", t.differ);
+  if (!/^[A-Za-z0-9_+-]+(\/[A-Za-z0-9_+-]+)*$/.test(a.timezone)) return wrong("timezone", t.badZone);
   $("go").disabled = true;
   say(t.sending);
   try {

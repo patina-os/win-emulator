@@ -15,6 +15,18 @@ All notable changes to Try patina for Windows are documented here. The format fo
   a terminal. Alt+Tab and Windows' own shortcuts work again once the pointer leaves the
   window, or after Ctrl+Alt+G.
 
+- patina's download shows in one progress dialog from start to end: a dialog per part
+  closed and opened again with an empty bar, and the minute of checking and joining
+  the 4 GB at the end showed nothing at all, as if the launcher hung.
+- The setup window marks the answer that is missing or wrong, brings it into view and
+  puts the cursor in it, instead of only a line in its footer, possibly under a page
+  scrolled away; the password field says it needs at least 8 characters before you
+  type. A ticked box shows a tick, and a card clicked with the mouse no longer gets a
+  second, violet ring round its green one.
+- The setup window and the last dialog before patina starts say that patina asks for
+  your password before it changes the system, in place of "sudo asks for it", a word
+  Windows does not use.
+
 ### Added
 
 - A setup window instead of patina's installer: one page in patina's look asks for your

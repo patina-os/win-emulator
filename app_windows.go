@@ -23,7 +23,7 @@ import (
 
 func main() {
 	if !singleInstance() {
-		zenity.Info(appName+" is already running: its window and its icon in the notification area are open.",
+		zenity.Info(appName+" is already running. Its menu is on the patina icon in the notification area.",
 			zenity.Title(appName))
 		return
 	}
@@ -526,41 +526,13 @@ func (a *app) fetchImage() (iso, tag string, err error) {
 	return iso, tag, a.fetch(tag, isoName, iso, map[string]string{isoName: want})
 }
 
-// fetch downloads a release's file to dest behind a progress dialog, or keeps the file
-// there when it matches its checksum in sums already. A file in parts (see parts) comes
-// part by part and is joined. context.Canceled when the user stops it.
+// fetch downloads a release's file to dest, or keeps the file there when it matches its
+// checksum in sums already. A file in parts (see parts) comes part by part and is joined.
+// One progress dialog shows all of it, the checks of what is on disk and the joining
+// too: a dialog per part closed and opened again with an empty bar, and the minute of
+// joining and checking 4 GB showed nothing at all. context.Canceled when the user stops
+// it.
 func (a *app) fetch(tag, name, dest string, sums map[string]string) error {
-	want := sums[name]
-	if fileExists(dest) {
-		if got, _ := fileSHA256(dest); got == want {
-			return nil
-		}
-		os.Remove(dest)
-	}
-	pieces := parts(sums, name)
-	if len(pieces) == 0 {
-		return a.fetchOne(tag, name, dest, want, "")
-	}
-	var paths []string
-	for i, p := range pieces {
-		path := filepath.Join(filepath.Dir(dest), p)
-		if err := a.fetchOne(tag, p, path, sums[p], fmt.Sprintf(" (part %d of %d)", i+1, len(pieces))); err != nil {
-			return err
-		}
-		paths = append(paths, path)
-	}
-	return joinParts(dest, paths, want)
-}
-
-// fetchOne downloads one file of a release, unless it is there already; which says which
-// part it is, for the dialog.
-func (a *app) fetchOne(tag, name, dest, want, which string) error {
-	if fileExists(dest) {
-		if got, _ := fileSHA256(dest); got == want {
-			return nil
-		}
-		os.Remove(dest)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	dlg, err := zenity.Progress(a.opts(zenity.MaxValue(1000), zenity.TimeRemaining(), zenity.Width(420))...)
@@ -575,20 +547,68 @@ func (a *app) fetchOne(tag, name, dest, want, which string) error {
 		case <-ctx.Done():
 		}
 	}()
+	want := sums[name]
+	if fileExists(dest) {
+		dlg.Text("Checking patina " + tag + " on this PC…")
+		if got, _ := fileSHA256(dest); got == want {
+			dlg.Complete()
+			return ctx.Err()
+		}
+		os.Remove(dest)
+	}
+	pieces := parts(sums, name)
+	if len(pieces) == 0 {
+		if err := a.fetchOne(ctx, dlg, tag, name, dest, want, 0, 1); err != nil {
+			return err
+		}
+		dlg.Complete()
+		return nil
+	}
+	var paths []string
+	for i, p := range pieces {
+		path := filepath.Join(filepath.Dir(dest), p)
+		if err := a.fetchOne(ctx, dlg, tag, p, path, sums[p], i, len(pieces)); err != nil {
+			return err
+		}
+		paths = append(paths, path)
+	}
+	dlg.Text("Checking patina " + tag + "…")
+	if err := joinParts(dest, paths, want); err != nil {
+		return err
+	}
+	dlg.Complete()
+	return ctx.Err()
+}
+
+// fetchOne downloads part i of n of a release's file into dlg, unless it is there
+// already.
+func (a *app) fetchOne(ctx context.Context, dlg zenity.ProgressDialog, tag, name, dest, want string, i, n int) error {
+	which := ""
+	if n > 1 {
+		which = fmt.Sprintf(" (part %d of %d)", i+1, n)
+	}
+	if fileExists(dest) {
+		dlg.Text("Checking patina " + tag + which + " on this PC…")
+		if got, _ := fileSHA256(dest); got == want {
+			dlg.Value((i + 1) * 1000 / n)
+			return ctx.Err()
+		}
+		os.Remove(dest)
+	}
 	dlg.Text("Downloading patina " + tag + which + "…")
 	var last time.Time
-	err = download(ctx, a.http, releaseAsset(patinaRepo, tag, name), dest, want, func(done, total int64) {
+	err := download(ctx, a.http, releaseAsset(patinaRepo, tag, name), dest, want, func(done, total int64) {
 		if time.Since(last) < 250*time.Millisecond || total == 0 {
 			return
 		}
 		last = time.Now()
-		dlg.Value(int(done * 1000 / total))
+		dlg.Value(int((int64(i)*1000 + done*1000/total) / int64(n)))
 		dlg.Text(fmt.Sprintf("Downloading patina %s%s… %d of %d MB", tag, which, done>>20, total>>20))
 	})
 	if err != nil {
 		return err
 	}
-	dlg.Complete()
+	dlg.Value((i + 1) * 1000 / n)
 	a.log.Printf("downloaded %s %s, checksum %s", name, tag, want)
 	return nil
 }
@@ -636,7 +656,7 @@ func (a *app) setupDisk() (bool, error) {
 	zenity.Info("patina starts now in a window.\n\n"+
 		"• On its first start it sets up the account and then its apps, which it downloads: that takes a "+
 		"while, and the login screen comes after it.\n"+
-		"• sudo asks for the password you gave in the setup.\n"+
+		"• While it sets up, it asks for the password you just chose: type it in its window.\n"+
 		"• The window's View menu has full screen and zoom. To close patina, shut it down from its own "+
 		"menu or from Try patina's icon in the notification area.",
 		a.opts(zenity.OKLabel("Start patina"), zenity.InfoIcon, zenity.Width(460))...)
