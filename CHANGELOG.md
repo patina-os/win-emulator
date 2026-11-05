@@ -6,6 +6,10 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-11-04
+
+The Windows key reaches patina, and the setup window points at what it still needs.
+
 ### Changed
 
 - The Windows key reaches patina while the pointer is over its window, so patina's
@@ -14,7 +18,6 @@ All notable changes to Try patina for Windows are documented here. The format fo
   and a press whose release it kept left Meta down in patina, so a later Return opened
   a terminal. Alt+Tab and Windows' own shortcuts work again once the pointer leaves the
   window, or after Ctrl+Alt+G.
-
 - patina's download shows in one progress dialog from start to end: a dialog per part
   closed and opened again with an empty bar, and the minute of checking and joining
   the 4 GB at the end showed nothing at all, as if the launcher hung.
@@ -26,6 +29,64 @@ All notable changes to Try patina for Windows are documented here. The format fo
 - The setup window and the last dialog before patina starts say that patina asks for
   your password before it changes the system, in place of "sudo asks for it", a word
   Windows does not use.
+
+## [0.0.7] - 2026-11-03
+
+patina's window opens large and no longer freezes after the start.
+
+### Changed
+
+- TryPatina.exe is built without stripping its symbol tables, about 14 MB instead of
+  10: Microsoft Defender's machine-learning guesses took the stripped file for
+  Trojan:Win32/Bearfoos.A!ml, a known false alarm for stripped Go programs. The README
+  says how to report such a detection.
+
+### Fixed
+
+- patina's window froze about a minute after it started, more than once in a row: the
+  launcher connected to QEMU's machine protocol ten seconds after the start, which on
+  this machine is the kernel's first seconds, after the firmware and GRUB's menu, and
+  stock QEMU on the Windows Hypervisor Platform can hang for good there. It now waits 45
+  seconds. A QEMU that hangs all the same, and so never answers, is ended and started
+  again, up to three times, instead of the launcher quitting with an error. The
+  launcher's log says when QEMU ended without a shutdown.
+- QEMU's window opened small, at the size of the firmware's first picture, and resizing
+  it often froze QEMU: patina took the window's size as its resolution and changed it
+  with every resize. patina now runs at 1920x1080 on standard VGA, which the window
+  only scales, and the window opens at about four fifths of the screen, centred.
+
+## [0.0.6-alpha] - 2026-11-03
+
+A shorter setup window.
+
+### Changed
+
+- The setup window shows each answer as a compact row, a radio or a box with its name
+  and what it brings, so it needs much less scrolling; only the themes keep their
+  picture from the installer, their palette over their wallpaper.
+
+### Fixed
+
+- The setup window in German is titled "Probiere patina auf Windows", and no browser
+  translates it: Edge's translator turned its title into "Probier mal Patina" and its
+  words, already German, into others ("Dein-Name").
+
+## [0.0.5-alpha] - 2026-11-03
+
+Starting over after an unfinished installation sets patina up from its disk.
+
+### Fixed
+
+- After an installation with the installer that did not finish, "Start over" (it said
+  "Start over with an empty disk") ran the installer again instead of setting patina up
+  from its ready-made disk, and nothing else led there: "Install patina again…" in the
+  icon's menu is only there while patina runs. Starting over now sets patina up anew
+  the default way. The dialog's question is short enough for its one line.
+
+## [0.0.4-alpha] - 2026-11-03
+
+patina from its ready-made disk, set up in a window of the launcher's own instead
+of the installer, for patina 0.1.0-alpha.5 and later.
 
 ### Added
 
@@ -44,41 +105,22 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ### Changed
 
-- TryPatina.exe is built without stripping its symbol tables, about 14 MB instead of
-  10: Microsoft Defender's machine-learning guesses took the stripped file for
-  Trojan:Win32/Bearfoos.A!ml, a known false alarm for stripped Go programs. The README
-  says how to report such a detection.
-- The setup window shows each answer as a compact row, a radio or a box with its name
-  and what it brings, so it needs much less scrolling; only the themes keep their
-  picture from the installer, their palette over their wallpaper.
 - A restart of patina ends QEMU, and the launcher starts it again.
 
 ### Fixed
 
-- patina's window froze about a minute after it started, more than once in a row: the
-  launcher connected to QEMU's machine protocol ten seconds after the start, which on
-  this machine is the kernel's first seconds, after the firmware and GRUB's menu, and
-  stock QEMU on the Windows Hypervisor Platform can hang for good there. It now waits 45
-  seconds. A QEMU that hangs all the same, and so never answers, is ended and started
-  again, up to three times, instead of the launcher quitting with an error. The
-  launcher's log says when QEMU ended without a shutdown.
-- QEMU's window opened small, at the size of the firmware's first picture, and resizing
-  it often froze QEMU: patina took the window's size as its resolution and changed it
-  with every resize. patina now runs at 1920x1080 on standard VGA, which the window
-  only scales, and the window opens at about four fifths of the screen, centred.
-- The setup window in German is titled "Probiere patina auf Windows", and no browser
-  translates it: Edge's translator turned its title into "Probier mal Patina" and its
-  words, already German, into others ("Dein-Name").
-- After an installation with the installer that did not finish, "Start over" (it said
-  "Start over with an empty disk") ran the installer again instead of setting patina up
-  from its ready-made disk, and nothing else led there: "Install patina again…" in the
-  icon's menu is only there while patina runs. Starting over now sets patina up anew
-  the default way. The dialog's question is short enough for its one line.
 - The QEMU window froze ("Not responding") at times: stock QEMU on the Windows
   Hypervisor Platform hangs for good when its machine protocol is connected to in the
   guest's first seconds, which the launcher did at once. It now waits ten seconds. A
   QEMU that hangs after patina shut down, as stock QEMU also does there, is ended
   fifteen seconds later. Both were found by Try Omarchy for Windows.
+
+## [0.0.3-alpha] - 2026-11-02
+
+Copy and paste works with the QEMU winget installs, and QEMU's machine protocol is out
+of patina's reach.
+
+### Fixed
 
 - The README says that QEMU's Machine → Quit (Ctrl+Alt+Q) turns patina off at once,
   like "Turn off now…"; it read as if nothing in the window could.
@@ -140,6 +182,12 @@ The first alpha, for testers with a Windows PC.
 - An icon in the notification area: shut patina down, turn it off, open the data
   folder, install patina again, remove it, and a note when a newer launcher is out.
 
-[Unreleased]: https://github.com/patina-os/win-emulator/compare/v0.0.2-alpha...HEAD
+[Unreleased]: https://github.com/patina-os/win-emulator/compare/v0.0.8...HEAD
+[0.0.8]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.8
+[0.0.7]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.7
+[0.0.6-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.6-alpha
+[0.0.5-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.5-alpha
+[0.0.4-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.4-alpha
+[0.0.3-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.3-alpha
 [0.0.2-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.2-alpha
 [0.0.1-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.1-alpha
