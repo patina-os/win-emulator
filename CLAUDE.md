@@ -73,4 +73,6 @@ and no guest code: what the guest needs is patina's
 - Update `CHANGELOG.md` under Unreleased for anything a user sees. Commit messages: an
   imperative subject under 72 characters, a body that explains why.
 - A release is a `v*` tag: CI builds and attaches `TryPatina.exe` to a draft release,
-  published after one run on a real Windows PC.
+  published after one run on a real Windows PC. Its notes are the version's section of
+  `CHANGELOG.md`; the release notes workflow, run by hand with a tag, sets them again
+  for a release made before its section was cut.
