@@ -1,0 +1,39 @@
+# Sets a release's notes to its section of CHANGELOG.md on main: for a release whose
+# notes GitHub generated, or one tagged before its section was cut. Run it by hand
+# (workflow_dispatch) with the release's tag; its exe, title and state stay as they are.
+name: release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag, such as v0.0.8
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  notes:
+    name: notes of ${{ inputs.tag }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: The release's notes from its section of CHANGELOG.md
+        run: |
+          version="${TAG#v}"
+          # The section release.yml takes for a new release, in the same way.
+          awk -v head="## [$version]" '
+            /^## \[/ { if (on) exit; on = index($0, head) == 1; next }
+            on && !/^\[[^]]*\]: /' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          [[ -s "$RUNNER_TEMP/notes.md" ]] || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          echo "The notes of $TAG are CHANGELOG.md's section for $version now." >> "$GITHUB_STEP_SUMMARY"
