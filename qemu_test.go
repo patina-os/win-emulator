@@ -15,7 +15,8 @@ import (
 // TestQEMUStarts runs QEMU with the launcher's command line, where TRY_PATINA_QEMU
 // names a QEMU (CI installs Debian's): the GTK window and DirectSound exist only in
 // the Windows build, so they become headless here; the firmware is the distribution's
-// OVMF. QEMU must come up, answer QMP and report the quit as the shutdown reason.
+// OVMF. qemu-img must make the disk and its layer, and QEMU must come up, answer QMP
+// and report the quit as the shutdown reason.
 func TestQEMUStarts(t *testing.T) {
 	qemu := os.Getenv("TRY_PATINA_QEMU")
 	if qemu == "" {
@@ -27,9 +28,12 @@ func TestQEMUStarts(t *testing.T) {
 	if err := copyFile("/usr/share/OVMF/OVMF_VARS_4M.fd", filepath.Join(dataDir, varsFile)); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("qemu-img", "create", "-q", "-f", "qcow2",
-		filepath.Join(dataDir, diskFile), diskSize).CombinedOutput(); err != nil {
-		t.Fatalf("qemu-img: %v %s", err, out)
+	// The disk as the launcher makes it: a layer over a ready-made disk, here an empty one.
+	base := filepath.Join(dataDir, "base.qcow2")
+	for _, args := range [][]string{diskArgs(base, ""), diskArgs(filepath.Join(dataDir, diskFile), base)} {
+		if out, err := exec.Command("qemu-img", args...).CombinedOutput(); err != nil {
+			t.Fatalf("qemu-img %v: %v %s", args, err, out)
+		}
 	}
 	m := Machine{QEMUDir: qemuDir, DataDir: dataDir, MemoryMB: 1024, CPUs: 2,
 		Accel: accelEmulation, QMP: "127.0.0.1:44555"}

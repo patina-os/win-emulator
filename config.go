@@ -24,6 +24,10 @@ const (
 	qemuWingetID   = "SoftwareFreedomConservancy.QEMU"
 	smbiosProduct  = "Try patina"
 
+	// Set to "host" in Windows' environment, it gives the guest the host's processor
+	// (cpuHost in machine.go): a switch to try it with, not a setting.
+	cpuEnv = "TRY_PATINA_CPU"
+
 	// The virtual disk grows as the guest writes; this is only its ceiling.
 	diskSize = "128G"
 	// The installer writes several GB; a disk smaller than this after the installer

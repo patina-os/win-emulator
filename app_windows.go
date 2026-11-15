@@ -44,7 +44,8 @@ type app struct {
 	qemuDir string
 	qemuVer string // from QEMU's VERSION file, such as 11.1.0
 	accel   string
-	noSound bool // DirectSound found no sound device
+	cpu     string // cpuHost while the host's processor is tried (cpuEnv), else empty
+	noSound bool   // DirectSound found no sound device
 
 	mu    sync.Mutex
 	qmp   *QMP   // the running machine, nil while none runs
@@ -72,6 +73,10 @@ func newApp() (*app, error) {
 	a.logFile = f
 	a.log = log.New(f, "", log.LstdFlags)
 	a.log.Printf("Try patina %s starts, data in %s", version, a.dir)
+	if os.Getenv(cpuEnv) == cpuHost {
+		a.cpu = cpuHost
+		a.log.Printf("%s=%s: the guest gets the host's processor where QEMU is new enough", cpuEnv, cpuHost)
+	}
 	a.icon = filepath.Join(a.dir, iconFile)
 	if ico, err := appIcon(); err == nil {
 		os.WriteFile(a.icon, ico, 0o644)
@@ -459,6 +464,8 @@ func (a *app) setup(st State) (done bool, err error) {
 		"• Pick your language, keyboard and account as on a PC. On the disk page, \"Erase disk\" erases "+
 		"only the virtual disk; Windows is not touched.\n"+
 		"• When the installer is done, patina restarts by itself and sets up its apps.\n"+
+		"• patina runs without a graphics card here, so it is slower than on a PC. For full speed, "+
+		"install it on a PC from patina's image.\n"+
 		"• The window's View menu has full screen and zoom. To close patina, shut it down from its "+
 		"own menu or from Try patina's icon in the notification area.",
 		a.opts(zenity.OKLabel("Open the installer"), zenity.InfoIcon, zenity.Width(460))...)
@@ -669,11 +676,7 @@ func (a *app) setupDisk() (bool, error) {
 func (a *app) createDisk(backing string) error {
 	disk := filepath.Join(a.dir, diskFile)
 	os.Remove(disk)
-	args := []string{"create", "-q", "-f", "qcow2", disk, diskSize}
-	if backing != "" {
-		args = []string{"create", "-q", "-f", "qcow2", "-b", backing, "-F", "qcow2", disk}
-	}
-	out, err := hidden(exec.Command(filepath.Join(a.qemuDir, qemuImg), args...)).CombinedOutput()
+	out, err := hidden(exec.Command(filepath.Join(a.qemuDir, qemuImg), diskArgs(disk, backing)...)).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("qemu-img could not create the disk: %v %s", err, out)
 	}
@@ -704,6 +707,9 @@ func (a *app) boot(iso string) (string, error) {
 		switch {
 		case failure == failedSound && !a.noSound:
 			a.noSound = true // patina runs without sound rather than not at all
+		case a.cpu != "":
+			a.log.Printf("back to the safe processor model")
+			a.cpu = ""
 		case failure == failedHypervisor && a.accel == accelWHPX:
 			a.accel = accelWHPXNoIRQ
 		case failure == failedHypervisor && a.accel != accelEmulation:
@@ -727,7 +733,7 @@ const reasonWedged = "wedged"
 func (a *app) start(iso string) (reason string, early bool, err error) {
 	memoryMB, cpus := sizing(hostMemoryMB(), runtime.NumCPU())
 	m := Machine{QEMUDir: a.qemuDir, Version: a.qemuVer, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
-		Accel: a.accel, ISO: iso, QMP: freeAddr(), NoSound: a.noSound, SerialLog: filepath.Join(a.dir, serialLog)}
+		Accel: a.accel, CPU: a.cpu, ISO: iso, QMP: freeAddr(), NoSound: a.noSound, SerialLog: filepath.Join(a.dir, serialLog)}
 	if answers := filepath.Join(a.dir, answersFile); fileExists(answers) {
 		m.Setup = answers
 	}

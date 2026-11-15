@@ -20,7 +20,18 @@ and no guest code: what the guest needs is patina's
 - Go, one program, cross-compiled from Linux, no cgo. Its own code is the only binary
   this repository makes; it is published only as a release asset, built by CI.
 - Stock QEMU from winget (`SoftwareFreedomConservancy.QEMU`), on the Windows Hypervisor
-  Platform. No patched QEMU bundle (WINQ-EMU), so no GPU in the guest for now.
+  Platform. No patched QEMU bundle (WINQ-EMU), so no GPU in the guest for now:
+  confirmed in November 2026, when the machine proved slow, since WINQ-EMU is an alpha,
+  weakest on Intel's integrated graphics, and a binary to build or to trust. Speed
+  comes from stock QEMU's own options: the guest runs without the hypervisor's separate
+  security domain (`ssd=off`, from QEMU 11.1), one mitigation between Windows and one
+  guest traded for faster emulated devices. The guest's processor stays the safe
+  `qemu64` set; the host's (`TRY_PATINA_CPU=host`) is a switch until a run on a real
+  PC confirms it. Not done, on purpose: `cache=unsafe` (the launcher ends a hung QEMU),
+  `pic=off` (Windows 10), more processors.
+- patina keeps its look in the machine; the setup window says that it is slower there
+  than on a PC and recommends patina's image on a PC (November 2026, in place of a
+  plainer desktop in the machine).
 - The guest starts from patina's released disk image (`patina-amd64.qcow2`, patina's
   `iso/disk/`: the installer's system without an account), under a qcow2 layer for its
   changes; the launcher asks what the installer asks in a setup window and hands the
@@ -52,7 +63,7 @@ and no guest code: what the guest needs is patina's
 | File | Holds |
 |---|---|
 | `config.go` | names, URLs, sizes: what the launcher uses, in one place |
-| `machine.go` | QEMU's command line and the machine's size |
+| `machine.go` | QEMU's command line, qemu-img's for the disk, and the machine's size |
 | `qmp.go` | the QMP client (commands without arguments, events) |
 | `download.go` | the latest release, `SHA256SUMS`, a resumable checked download |
 | `setup.go`, `setup.html` | the setup window: patina's pages, the answers and the file for the guest, the page's local server, the page |
