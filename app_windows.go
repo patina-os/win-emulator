@@ -44,7 +44,8 @@ type app struct {
 	qemuDir string
 	qemuVer string // from QEMU's VERSION file, such as 11.1.0
 	accel   string
-	noSound bool // DirectSound found no sound device
+	cpu     string // cpuHost while the host's processor is tried (cpuEnv), else empty
+	noSound bool   // DirectSound found no sound device
 
 	mu    sync.Mutex
 	qmp   *QMP   // the running machine, nil while none runs
@@ -72,6 +73,10 @@ func newApp() (*app, error) {
 	a.logFile = f
 	a.log = log.New(f, "", log.LstdFlags)
 	a.log.Printf("Try patina %s starts, data in %s", version, a.dir)
+	if os.Getenv(cpuEnv) == cpuHost {
+		a.cpu = cpuHost
+		a.log.Printf("%s=%s: the guest gets the host's processor where QEMU is new enough", cpuEnv, cpuHost)
+	}
 	a.icon = filepath.Join(a.dir, iconFile)
 	if ico, err := appIcon(); err == nil {
 		os.WriteFile(a.icon, ico, 0o644)
@@ -704,6 +709,9 @@ func (a *app) boot(iso string) (string, error) {
 		switch {
 		case failure == failedSound && !a.noSound:
 			a.noSound = true // patina runs without sound rather than not at all
+		case a.cpu != "":
+			a.log.Printf("back to the safe processor model")
+			a.cpu = ""
 		case failure == failedHypervisor && a.accel == accelWHPX:
 			a.accel = accelWHPXNoIRQ
 		case failure == failedHypervisor && a.accel != accelEmulation:
@@ -727,7 +735,7 @@ const reasonWedged = "wedged"
 func (a *app) start(iso string) (reason string, early bool, err error) {
 	memoryMB, cpus := sizing(hostMemoryMB(), runtime.NumCPU())
 	m := Machine{QEMUDir: a.qemuDir, Version: a.qemuVer, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
-		Accel: a.accel, ISO: iso, QMP: freeAddr(), NoSound: a.noSound, SerialLog: filepath.Join(a.dir, serialLog)}
+		Accel: a.accel, CPU: a.cpu, ISO: iso, QMP: freeAddr(), NoSound: a.noSound, SerialLog: filepath.Join(a.dir, serialLog)}
 	if answers := filepath.Join(a.dir, answersFile); fileExists(answers) {
 		m.Setup = answers
 	}

@@ -16,6 +16,7 @@ type Machine struct {
 	MemoryMB int
 	CPUs     int
 	Accel    string // whpx, whpx,kernel-irqchip=off or tcg
+	CPU      string // cpuHost to try the host's processor on the hypervisor, else empty
 	ISO      string // set for the installer's run: patina's image as a CD
 	QMP      string // host:port of the QMP socket the launcher talks to
 	NoSound  bool   // no sound device: DirectSound found none on the host
@@ -33,6 +34,7 @@ const (
 	accelWHPXNoIRQ    = "whpx,kernel-irqchip=off"
 	accelEmulation    = "tcg"
 	cpuWHPX           = "qemu64,+ssse3,+sse4.1,+sse4.2,+popcnt,+aes"
+	cpuHost           = "host"
 	cpuEmulation      = "max"
 	firmwareCode      = "edk2-x86_64-code.fd"
 	firmwareVarsBlank = "edk2-i386-vars.fd" // QEMU pairs the x86_64 code with these
@@ -48,6 +50,12 @@ const clipboardMajor, clipboardMinor = 11, 1
 // the gain significant; the price is that mitigation between Windows and this one
 // guest, which runs what its one user runs. An older QEMU refuses the option.
 const ssdMajor, ssdMinor = 11, 1
+
+// The host's processor as the guest's (cpuHost) gives patina AVX2, which drawing on the
+// CPU gains most from. Stock QEMU's guests failed on any model with AVX before the
+// fixes of its 11.1 series, and which Windows build carries them all is not known, so
+// it is tried only when asked for (cpuEnv), and the safe model follows a failed start.
+const cpuHostMajor, cpuHostMinor = 11, 1
 
 // versionAtLeast is true when a QEMU version such as 11.1.0 is major.minor or later.
 // An unknown version is not.
@@ -72,8 +80,13 @@ func (m Machine) Args() []string {
 	cpu, accel := cpuWHPX, m.Accel
 	if m.Accel == accelEmulation {
 		cpu = cpuEmulation
-	} else if versionAtLeast(m.Version, ssdMajor, ssdMinor) {
-		accel += ",ssd=off"
+	} else {
+		if m.CPU == cpuHost && versionAtLeast(m.Version, cpuHostMajor, cpuHostMinor) {
+			cpu = cpuHost
+		}
+		if versionAtLeast(m.Version, ssdMajor, ssdMinor) {
+			accel += ",ssd=off"
+		}
 	}
 	a := []string{
 		"-name", appName, // the window title
