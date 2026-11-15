@@ -42,6 +42,13 @@ const (
 // before, the Windows builds had no clipboard in that window at all.
 const clipboardMajor, clipboardMinor = 11, 1
 
+// QEMU 11.1 can run the guest without the hypervisor's separate security domain
+// (ssd=off): no flush of the branch predictor at each entry to and exit from the guest,
+// which is what every access to an emulated device costs. QEMU's documentation calls
+// the gain significant; the price is that mitigation between Windows and this one
+// guest, which runs what its one user runs. An older QEMU refuses the option.
+const ssdMajor, ssdMinor = 11, 1
+
 // versionAtLeast is true when a QEMU version such as 11.1.0 is major.minor or later.
 // An unknown version is not.
 func versionAtLeast(v string, major, minor int) bool {
@@ -62,14 +69,16 @@ func qemuPath(p string) string {
 // window; closing it does nothing, so patina is shut down from inside or from the tray
 // and never loses its disk to a closed window.
 func (m Machine) Args() []string {
-	cpu := cpuWHPX
+	cpu, accel := cpuWHPX, m.Accel
 	if m.Accel == accelEmulation {
 		cpu = cpuEmulation
+	} else if versionAtLeast(m.Version, ssdMajor, ssdMinor) {
+		accel += ",ssd=off"
 	}
 	a := []string{
 		"-name", appName, // the window title
 		"-machine", "q35",
-		"-accel", m.Accel,
+		"-accel", accel,
 		"-cpu", cpu,
 		"-smp", fmt.Sprint(m.CPUs),
 		"-m", fmt.Sprintf("%dM", m.MemoryMB),

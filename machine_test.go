@@ -72,6 +72,24 @@ func TestClipboardByVersion(t *testing.T) {
 	}
 }
 
+func TestSSDByVersion(t *testing.T) {
+	for _, c := range []struct {
+		version, accel, want string
+	}{
+		{"11.1.0", accelWHPX, "whpx,ssd=off"},
+		{"12.0.0", accelWHPXNoIRQ, "whpx,kernel-irqchip=off,ssd=off"},
+		{"11.0.0", accelWHPX, "whpx"}, // an older QEMU refuses the option
+		{"", accelWHPXNoIRQ, "whpx,kernel-irqchip=off"},
+		{"11.1.0", accelEmulation, "tcg"},
+	} {
+		m := Machine{QEMUDir: "q", Version: c.version, DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: c.accel, QMP: "x:1"}
+		a := m.Args()
+		if got := a[slices.Index(a, "-accel")+1]; got != c.want {
+			t.Errorf("QEMU %q, %s: -accel %s, want %s", c.version, c.accel, got, c.want)
+		}
+	}
+}
+
 func TestNoSound(t *testing.T) {
 	m := Machine{QEMUDir: "q", DataDir: "d", MemoryMB: 4096, CPUs: 2, Accel: accelWHPX, QMP: "x:1", NoSound: true}
 	a := m.Args()
