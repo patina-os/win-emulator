@@ -6,6 +6,10 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-11-15
+
+Faster on stock QEMU, and the setup says that patina is slower here than on a PC.
+
 ### Changed
 
 - patina runs faster on QEMU 11.1 and later: the guest no longer pays for a flush of
@@ -201,7 +205,8 @@ The first alpha, for testers with a Windows PC.
 - An icon in the notification area: shut patina down, turn it off, open the data
   folder, install patina again, remove it, and a note when a newer launcher is out.
 
-[Unreleased]: https://github.com/patina-os/win-emulator/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/patina-os/win-emulator/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.9
 [0.0.8]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.8
 [0.0.7]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.7
 [0.0.6-alpha]: https://github.com/patina-os/win-emulator/releases/tag/v0.0.6-alpha
