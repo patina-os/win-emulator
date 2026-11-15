@@ -6,6 +6,25 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+### Changed
+
+- patina runs faster on QEMU 11.1 and later: the guest no longer pays for a flush of
+  the processor's branch predictor each time it reaches the display, the disk or the
+  sound (`-accel whpx,ssd=off`). That turns off one mitigation between Windows and the
+  virtual machine; the README says what.
+- A new machine's disk copies only what patina writes out of the downloaded disk, not
+  the 64k around each write, so the first start and installs in patina wait less for
+  the disk. Machines that exist keep their disk; "Start over" makes a new one.
+- The setup window, and the dialog before the installer opens, say that patina runs
+  without a graphics card here and is slower than on a PC, and that patina's image on
+  a PC is the way to full speed.
+
+### Added
+
+- `TRY_PATINA_CPU=host` in Windows' environment gives patina the host's processor
+  instead of the safe model, from QEMU 11.1: a switch to try, not yet the default. A
+  start that fails with it falls back to the safe model.
+
 ## [0.0.8] - 2026-11-04
 
 The Windows key reaches patina, and the setup window points at what it still needs.

@@ -77,6 +77,9 @@ on that drive.
 
 - No GPU in the guest: stock QEMU draws patina's desktop on the CPU, which is fine for
   trying patina and slower than on hardware. Effects and video are the first to show it.
+  patina keeps its look there all the same, and the setup says so before the download.
+  For patina at full speed, install it on a PC from
+  [its image](https://github.com/patina-os/patina#install).
 - No shared folders, no USB devices and no SSH port yet; copy files through the
   clipboard or a cloud folder (the Nextcloud client is in patina's default apps).
 - Not for Windows on ARM: patina's image is x86_64 there.
@@ -99,21 +102,37 @@ binary but itself:
   from [qemu.weilnetz.de](https://qemu.weilnetz.de/)), on the Windows Hypervisor
   Platform (`-accel whpx`). When the hypervisor refuses the in-kernel interrupt
   controller (some laptops refuse nested virtualization) it retries with
-  `kernel-irqchip=off`, then offers emulation.
+  `kernel-irqchip=off`, then offers emulation. From QEMU 11.1 the guest runs without
+  the hypervisor's separate security domain (`ssd=off`): the branch predictor is no
+  longer flushed each time the guest reaches a device QEMU emulates, which the display,
+  the disk and the sound all are. That is one mitigation less between Windows and this
+  one guest, for what QEMU's documentation calls a significant gain.
 - **The machine** is a q35 PC with UEFI (QEMU's edk2), an NVMe disk (so patina's I/O
   scheduler rules apply as on a laptop), standard VGA at 1920x1080 in a window that
   takes the keyboard while the pointer is over it (`grab-on-hover`), a USB tablet,
   virtio networking, Intel HD audio on DirectSound (none when Windows has no sound
   device, which QEMU does not start without), half the host's memory (4 to 8 GB)
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the
-  set the Windows Hypervisor Platform runs safely in stock QEMU.
+  set the Windows Hypervisor Platform runs safely in stock QEMU. `TRY_PATINA_CPU=host`
+  in Windows' environment gives the guest the host's processor from QEMU 11.1, with
+  AVX2 for the drawing: a switch to try, since no run on a real PC confirmed it yet.
+  A start that fails with it goes back to the safe model; a patina that fails later
+  needs the variable unset.
+- **What was left out for speed**, and why: writing to the disk without flushes
+  (`cache=unsafe`), because the launcher ends a QEMU that hangs and the disk would not
+  survive it; the Hyper-V interrupt controller alone (`pic=off`), which does not wake a
+  halted guest on Windows 10; more processors, since half of the host's threads is
+  already every core of a laptop; virtio graphics, which froze QEMU when its window
+  was resized; and a QEMU patched for a GPU in the guest, which would be a binary of
+  its own to keep.
 - **Copy and paste** is QEMU's own vdagent (`-chardev qemu-vdagent`) between QEMU's GTK
   window and `spice-vdagent` in patina; no SPICE viewer is involved. The GTK window
   shares the Windows clipboard from QEMU 11.1 on, when asked (`-display
   gtk,clipboard=on`); the Windows builds before it have no clipboard in that window.
 - **patina** comes from its released `patina-amd64.qcow2`: the system patina's
   installer leaves on a disk, without an account. The machine's own disk is a layer
-  over it. The setup's answers reach patina once, as QEMU firmware configuration
+  over it, with clusters in 32 parts (`extended_l2`), so a first write copies only the
+  parts it touches out of the compressed disk below. The setup's answers reach patina once, as QEMU firmware configuration
   (`-fw_cfg name=opt/io.github.patina_os/setup`); its first start sets the account up
   from them and runs `patina install`, then says so on the serial port, and the
   launcher deletes the answers, the password among them. The launcher names the machine
