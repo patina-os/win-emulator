@@ -158,6 +158,18 @@ func (m Machine) Args() []string {
 	return a
 }
 
+// diskArgs is qemu-img's command line for the virtual disk: empty, for the installer, or
+// a layer over the ready-made disk (backing). The layer's clusters are 128k in 32 parts
+// (extended_l2): the guest's first write to a cluster otherwise copies the whole of it
+// out of the disk below, which is compressed, and now only the 4k parts it touches.
+func diskArgs(disk, backing string) []string {
+	if backing == "" {
+		return []string{"create", "-q", "-f", "qcow2", disk, diskSize}
+	}
+	return []string{"create", "-q", "-f", "qcow2", "-o", "extended_l2=on,cluster_size=128k",
+		"-b", backing, "-F", "qcow2", disk}
+}
+
 // What stopped QEMU as it started, as the end of its log tells: the Windows Hypervisor
 // Platform refused it, or DirectSound found no sound device (a PC with no speakers or
 // headphones attached, a remote session), which QEMU does not start without.

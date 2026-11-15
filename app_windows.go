@@ -674,11 +674,7 @@ func (a *app) setupDisk() (bool, error) {
 func (a *app) createDisk(backing string) error {
 	disk := filepath.Join(a.dir, diskFile)
 	os.Remove(disk)
-	args := []string{"create", "-q", "-f", "qcow2", disk, diskSize}
-	if backing != "" {
-		args = []string{"create", "-q", "-f", "qcow2", "-b", backing, "-F", "qcow2", disk}
-	}
-	out, err := hidden(exec.Command(filepath.Join(a.qemuDir, qemuImg), args...)).CombinedOutput()
+	out, err := hidden(exec.Command(filepath.Join(a.qemuDir, qemuImg), diskArgs(disk, backing)...)).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("qemu-img could not create the disk: %v %s", err, out)
 	}
