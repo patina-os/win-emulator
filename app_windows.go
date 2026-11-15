@@ -464,6 +464,8 @@ func (a *app) setup(st State) (done bool, err error) {
 		"• Pick your language, keyboard and account as on a PC. On the disk page, \"Erase disk\" erases "+
 		"only the virtual disk; Windows is not touched.\n"+
 		"• When the installer is done, patina restarts by itself and sets up its apps.\n"+
+		"• patina runs without a graphics card here, so it is slower than on a PC. For full speed, "+
+		"install it on a PC from patina's image.\n"+
 		"• The window's View menu has full screen and zoom. To close patina, shut it down from its "+
 		"own menu or from Try patina's icon in the notification area.",
 		a.opts(zenity.OKLabel("Open the installer"), zenity.InfoIcon, zenity.Width(460))...)
