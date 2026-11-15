@@ -154,18 +154,18 @@ func TestSetupWaitGivesUp(t *testing.T) {
 	defer s.Close()
 	// A page that spoke once and went quiet: its tab was closed.
 	http.Post(s.URL+"alive", "", nil)
-	if _, err := s.wait(nil, 100*time.Millisecond); err != errSetupCanceled {
+	if _, err := s.wait(nil, 100*time.Millisecond); err != errPageClosed {
 		t.Errorf("a quiet page: %v", err)
 	}
 	// Its window closed.
 	closed := make(chan struct{})
 	close(closed)
-	if _, err := s.wait(closed, time.Minute); err != errSetupCanceled {
+	if _, err := s.wait(closed, time.Minute); err != errPageClosed {
 		t.Errorf("a closed window: %v", err)
 	}
 	// Canceled.
 	http.Post(s.URL+"cancel", "", nil)
-	if _, err := s.wait(nil, time.Minute); err != errSetupCanceled {
+	if _, err := s.wait(nil, time.Minute); err != errPageClosed {
 		t.Errorf("canceled: %v", err)
 	}
 }

@@ -637,7 +637,7 @@ func (a *app) setupDisk() (bool, error) {
 		return false, fmt.Errorf("cannot read patina's setup pages: %w", err)
 	}
 	answers, err := a.askSetup(pages)
-	if errors.Is(err, errSetupCanceled) {
+	if errors.Is(err, errPageClosed) {
 		return false, nil
 	}
 	if err != nil {
