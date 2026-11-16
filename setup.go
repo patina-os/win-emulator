@@ -3,19 +3,15 @@
 package main
 
 import (
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -177,48 +173,27 @@ var setupHTML []byte
 
 // setupServer serves the page and takes its answers.
 type setupServer struct {
-	URL      string
+	*localPage
 	pages    setupPages
 	defaults setupDefaults
-	icon     []byte
-	srv      *http.Server
 	answers  chan setupAnswers
-	canceled chan struct{}
-	cancel   sync.Once
-	alive    chan struct{}
 }
 
-// startSetup serves the page on 127.0.0.1, under a path no other program can guess.
+// startSetup serves the setup page.
 func startSetup(p setupPages, d setupDefaults, icon []byte) (*setupServer, error) {
-	token := make([]byte, 16)
-	if _, err := rand.Read(token); err != nil {
-		return nil, err
-	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	page, err := newLocalPage(setupHTML, icon)
 	if err != nil {
 		return nil, err
 	}
-	prefix := "/" + hex.EncodeToString(token) + "/"
-	s := &setupServer{URL: "http://" + ln.Addr().String() + prefix, pages: p, defaults: d, icon: icon,
-		answers: make(chan setupAnswers, 1), canceled: make(chan struct{}), alive: make(chan struct{}, 1)}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+prefix+"{$}", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		w.Write(setupHTML)
-	})
-	mux.HandleFunc("GET "+prefix+"setup.json", func(w http.ResponseWriter, r *http.Request) {
+	s := &setupServer{localPage: page, pages: p, defaults: d, answers: make(chan setupAnswers, 1)}
+	s.mux.HandleFunc("GET "+s.prefix+"setup.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(struct {
 			setupPages
 			Defaults setupDefaults `json:"defaults"`
 		}{s.pages, s.defaults})
 	})
-	mux.HandleFunc("GET "+prefix+"icon.png", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
-		w.Write(s.icon)
-	})
-	mux.HandleFunc("POST "+prefix+"submit", func(w http.ResponseWriter, r *http.Request) {
+	s.mux.HandleFunc("POST "+s.prefix+"submit", func(w http.ResponseWriter, r *http.Request) {
 		var a setupAnswers
 		w.Header().Set("Content-Type", "application/json")
 		err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&a)
@@ -236,49 +211,10 @@ func startSetup(p setupPages, d setupDefaults, icon []byte) (*setupServer, error
 		}
 		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 	})
-	mux.HandleFunc("POST "+prefix+"cancel", func(w http.ResponseWriter, r *http.Request) {
-		s.cancel.Do(func() { close(s.canceled) })
-	})
-	mux.HandleFunc("POST "+prefix+"alive", func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case s.alive <- struct{}{}:
-		default:
-		}
-	})
-	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-	go s.srv.Serve(ln)
 	return s, nil
 }
 
-// errSetupCanceled is a setup window closed or canceled without answers.
-var errSetupCanceled = errors.New("the setup was canceled")
-
-// wait returns the answers once the page sent them. It gives up when the page was
-// canceled, when closed reports that its window closed, or when the page, which says it
-// is open every few seconds, has gone quiet: a browser tab closed. quiet is how long that
-// may take; before the page first speaks it gets five minutes, for a browser to start.
+// wait returns the answers once the page sent them, or errPageClosed (waitPage).
 func (s *setupServer) wait(closed <-chan struct{}, quiet time.Duration) (setupAnswers, error) {
-	timer := time.NewTimer(5 * time.Minute)
-	defer timer.Stop()
-	for {
-		select {
-		case a := <-s.answers:
-			return a, nil
-		case <-s.canceled:
-			return setupAnswers{}, errSetupCanceled
-		case <-closed:
-			select { // the last answer may have come with the window's end
-			case a := <-s.answers:
-				return a, nil
-			default:
-				return setupAnswers{}, errSetupCanceled
-			}
-		case <-s.alive:
-			timer.Reset(quiet)
-		case <-timer.C:
-			return setupAnswers{}, errSetupCanceled
-		}
-	}
+	return waitPage(s.localPage, s.answers, closed, quiet)
 }
-
-func (s *setupServer) Close() error { return s.srv.Close() }

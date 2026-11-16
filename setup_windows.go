@@ -3,10 +3,12 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unsafe"
@@ -107,22 +109,23 @@ func edgePath() string {
 	return ""
 }
 
-// askSetup shows the setup page in a window of its own: Edge as an app (the engine of
-// Windows' WebView2), with a profile of its own in the data directory, so it neither
-// joins a running Edge nor keeps anything. Without Edge the default browser shows it.
-func (a *app) askSetup(p setupPages) (setupAnswers, error) {
-	icon, _ := assets.ReadFile("assets/icon-small-64.png")
-	s, err := startSetup(p, hostDefaults(), icon)
+// window shows a page of the launcher's in a window of its own: Edge as an app (the
+// engine of Windows' WebView2), with a profile of its own in the data directory, so it
+// neither joins a running Edge nor keeps anything. Without Edge the default browser
+// shows it. closed tells when the window closed, where that can be seen; done ends the
+// window, once the page had a moment to say its last word, and deletes the profile.
+func (a *app) window(url, size string) (closed <-chan struct{}, done func()) {
+	// A directory per window: the last window's is deleted a moment after it closed,
+	// when the next one may be open already.
+	profile, err := os.MkdirTemp(a.dir, "window-")
 	if err != nil {
-		return setupAnswers{}, err
+		profile = filepath.Join(a.dir, "setup-window")
 	}
-	defer s.Close()
-	profile := filepath.Join(a.dir, "setup-window")
 	var edge *exec.Cmd
-	closed := make(chan struct{})
+	gone := make(chan struct{})
 	if path := edgePath(); path != "" {
-		edge = exec.Command(path, "--app="+s.URL, "--user-data-dir="+profile, "--no-first-run",
-			"--no-default-browser-check", "--disable-sync", "--window-size=1040,820")
+		edge = exec.Command(path, "--app="+url, "--user-data-dir="+profile, "--no-first-run",
+			"--no-default-browser-check", "--disable-sync", "--window-size="+size)
 		if err := edge.Start(); err != nil {
 			a.log.Printf("Edge does not start: %v", err)
 			edge = nil
@@ -135,18 +138,56 @@ func (a *app) askSetup(p setupPages) (setupAnswers, error) {
 			// An Edge that ends at once handed the window to another one; then the page's
 			// own signs of life tell when it closes.
 			if time.Since(started) > 5*time.Second {
-				close(closed)
+				close(gone)
 			}
 		}()
 	} else {
-		a.log.Print("no Edge: the setup opens in the default browser")
-		open(s.URL)
+		a.log.Print("no Edge: the page opens in the default browser")
+		open(url)
 	}
-	answers, err := s.wait(closed, 2*time.Minute)
-	if edge != nil {
-		time.Sleep(1500 * time.Millisecond) // the page says it is done
-		edge.Process.Kill()
+	return gone, func() {
+		if edge != nil {
+			time.Sleep(1500 * time.Millisecond)
+			edge.Process.Kill()
+		}
+		time.AfterFunc(5*time.Second, func() { os.RemoveAll(profile) }) // once Edge's helpers ended
 	}
-	time.AfterFunc(5*time.Second, func() { os.RemoveAll(profile) }) // once Edge's helpers ended
-	return answers, err
+}
+
+// askSetup shows the setup page and returns its answers, or errPageClosed.
+func (a *app) askSetup(p setupPages) (setupAnswers, error) {
+	icon, _ := assets.ReadFile("assets/icon-small-64.png")
+	s, err := startSetup(p, hostDefaults(), icon)
+	if err != nil {
+		return setupAnswers{}, err
+	}
+	defer s.Close()
+	closed, done := a.window(s.URL, "1040,820")
+	defer done()
+	return s.wait(closed, 2*time.Minute)
+}
+
+// askStart shows the start page of an installed machine and returns what the user
+// chose, or errPageClosed. seconds is how long the page waits before it starts patina
+// by itself; zero is for ever, for a page that comes back after a question.
+func (a *app) askStart(st State, seconds int) (startChoice, error) {
+	icon, _ := assets.ReadFile("assets/icon-small-64.png")
+	hostMB, hostCPUs := hostMemoryMB(), runtime.NumCPU()
+	info := startInfo{Version: version, Release: st.Release, QEMU: a.qemuVer, Seconds: seconds,
+		German:        strings.HasPrefix(localeFor(userLocaleName()), "de_"),
+		MemoryChoices: memoryChoices(hostMB), CPUChoices: cpuChoices(hostCPUs),
+		HostCPU:  a.accel != accelEmulation && versionAtLeast(a.qemuVer, cpuHostMajor, cpuHostMinor),
+		Settings: a.settings}
+	info.AutoMemoryMB, info.AutoCPUs = sizing(hostMB, hostCPUs)
+	if b, err := os.ReadFile(filepath.Join(a.dir, lookFile)); err == nil {
+		json.Unmarshal(b, &info.look)
+	}
+	s, err := startStart(info, icon, func() { open(a.dir) })
+	if err != nil {
+		return startChoice{}, err
+	}
+	defer s.Close()
+	closed, done := a.window(s.URL, "900,760")
+	defer done()
+	return waitPage(s.localPage, s.choice, closed, 2*time.Minute)
 }

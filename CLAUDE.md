@@ -26,8 +26,8 @@ and no guest code: what the guest needs is patina's
   comes from stock QEMU's own options: the guest runs without the hypervisor's separate
   security domain (`ssd=off`, from QEMU 11.1), one mitigation between Windows and one
   guest traded for faster emulated devices. The guest's processor stays the safe
-  `qemu64` set; the host's (`TRY_PATINA_CPU=host`) is a switch until a run on a real
-  PC confirms it. Not done, on purpose: `cache=unsafe` (the launcher ends a hung QEMU),
+  `qemu64` set; the host's (the start page's box, or `TRY_PATINA_CPU=host`) is a switch until a run
+  on a real PC confirms it. Not done, on purpose: `cache=unsafe` (the launcher ends a hung QEMU),
   `pic=off` (Windows 10), more processors.
 - patina keeps its look in the machine; the setup window says that it is slower there
   than on a PC and recommends patina's image on a PC (November 2026, in place of a
@@ -44,6 +44,12 @@ and no guest code: what the guest needs is patina's
   and fonts come from the release's `patina-setup.json`, each answer a compact row and
   only the themes with their pictures (November 2026). No WebView2 library: the Go ones
   embed Microsoft's loader DLL or exit the program on an error.
+- An installed Try patina opens with a start page, as the setup window is made, which
+  starts patina by itself after ten seconds unless it is touched (November 2026, the
+  maintainer's choice of a page over a dialog, of every start over only when asked):
+  the machine's memory and processors, the host's processor as a switch, and starting
+  over, which the tray's menu can do only once a machine runs. Its settings are few and
+  kept in `settings.json`, which outlives a machine installed again.
 - The display is standard VGA at one resolution, 1920x1080, which QEMU's window scales,
   and the launcher opens that window at four fifths of the screen (November 2026):
   with virtio graphics patina took the window's size as its resolution, so the window
@@ -66,10 +72,12 @@ and no guest code: what the guest needs is patina's
 | `machine.go` | QEMU's command line, qemu-img's for the disk, and the machine's size |
 | `qmp.go` | the QMP client (commands without arguments, events) |
 | `download.go` | the latest release, `SHA256SUMS`, a resumable checked download |
-| `setup.go`, `setup.html` | the setup window: patina's pages, the answers and the file for the guest, the page's local server, the page |
+| `page.go` | the local server a page of the launcher's is served by: a random path, the page's signs of life, the wait for its answer |
+| `setup.go`, `setup.html` | the setup window: patina's pages, the answers and the file for the guest, the page |
+| `start.go`, `start.html` | the start page of an installed machine: what it shows, the choice it sends back, the page |
 | `locale.go` | Windows' language, keyboard and time zone in the guest's terms, and the setup's lists |
-| `state.go`, `icon.go` | the data directory's state file, the `.ico` packer |
-| `*_windows.go` | Windows only: the host checks, the dialogs, the tray, the flow, what Windows says for the setup and its Edge window |
+| `state.go`, `icon.go` | the data directory's state file and the start page's settings, the `.ico` packer |
+| `*_windows.go` | Windows only: the host checks, the dialogs, the tray, the flow, what Windows says for the setup and the Edge window of both pages |
 | `main_other.go` | a stub, so the rest builds and tests on Linux |
 | `build.sh` | fetches patina's icon, writes the Windows resources, builds `dist/` |
 

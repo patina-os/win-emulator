@@ -1,0 +1,240 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Try patina's start page (start.go): what an installed Try patina opens with. It starts
+     patina by itself after a few seconds, unless it is touched. Its colours and fonts are
+     the setup window's; nothing here is fetched from anywhere but the launcher itself. -->
+<html lang="en" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Try patina</title>
+<link rel="icon" href="icon.png">
+<style>
+  :root {
+    --bg: #000; --panel: #0b0b0b; --raised: #161616; --line: #222; --muted: #888;
+    --text: #ddd; --bright: #fff; --accent: #fff; --accent2: #aaa; --error: #f66;
+    --ui: "Segoe UI", system-ui, sans-serif; --display: var(--ui); --mono: Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); font: 15px/1.5 var(--ui);
+    display: flex; flex-direction: column; visibility: hidden;
+  }
+  body.ready { visibility: visible; }
+  header { display: flex; align-items: center; gap: 16px; padding: 22px 32px 18px; }
+  header img { width: 44px; height: 44px; }
+  h1 { font: 600 24px/1.2 var(--display); margin: 0; color: var(--bright); letter-spacing: -0.01em; }
+  header p { margin: 2px 0 0; color: var(--muted); }
+  .version { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  main { flex: 1; overflow-y: auto; padding: 0 32px 24px; scrollbar-color: var(--raised) var(--bg); }
+  section {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 20px 18px; margin-top: 12px;
+  }
+  section[hidden] { display: none; }
+  h2 { font: 600 17px/1.3 var(--display); margin: 0 0 4px; color: var(--bright); }
+  .note { color: var(--muted); margin: 0 0 12px; font-size: 14px; }
+  h2 + .cards { margin-top: 10px; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 18px; }
+  .fields.pairs { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+  input, select {
+    font: 15px var(--ui); color: var(--bright); background: var(--raised);
+    border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; width: 100%;
+  }
+  /* A card's ring is for the keyboard only: a click on it already shows the pick, and a
+     second ring round the picked border looked like a mistake. */
+  input:focus-visible, select:focus-visible, button:focus-visible, .card:has(input:focus-visible) {
+    outline: 2px solid var(--accent2); outline-offset: 2px;
+  }
+  input::placeholder { color: var(--muted); opacity: .7; }
+  /* the field an answer is missing in, until it is typed into */
+  input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--error); }
+  footer {
+    display: flex; align-items: center; gap: 12px; padding: 14px 32px;
+    border-top: 1px solid var(--line); background: var(--bg);
+  }
+  #message { flex: 1; color: var(--error); min-height: 1.5em; }
+  #message.done { color: var(--accent); }
+  button {
+    font: 600 15px var(--ui); border-radius: 10px; padding: 10px 20px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raised); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  button:disabled { opacity: .5; cursor: default; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; padding: 0; accent-color: var(--accent); }
+  .check strong { display: block; color: var(--bright); font-weight: 600; }
+  .check span { display: block; color: var(--muted); font-size: 13px; }
+  .check[hidden] { display: none; }
+  /* What starts over: a row each, the button and what it does. */
+  .rows { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; align-items: center; }
+  .rows button { font-weight: 500; padding: 8px 14px; text-align: left; }
+  .rows button:hover { border-color: var(--accent2); }
+  .rows span { color: var(--muted); font-size: 13.5px; }
+  @media (max-width: 600px) { .rows { grid-template-columns: 1fr; gap: 4px; } .rows span { margin-bottom: 8px; } }
+  #message { color: var(--muted); }
+  #message.error { color: var(--error); }
+</style>
+</head>
+<body>
+<header>
+  <img src="icon.png" alt="">
+  <div>
+    <h1 data-t="title"></h1>
+    <p class="version" id="versions"></p>
+  </div>
+</header>
+<main>
+  <section>
+    <h2 data-t="machine"></h2>
+    <p class="note" data-t="machineNote"></p>
+    <div class="fields">
+      <label class="field"><span data-t="memory"></span><select id="memory"></select></label>
+      <label class="field"><span data-t="cpus"></span><select id="cpus"></select></label>
+    </div>
+    <label class="check" id="hostRow" hidden>
+      <input type="checkbox" id="host">
+      <div><strong data-t="host"></strong><span data-t="hostNote"></span></div>
+    </label>
+  </section>
+  <section>
+    <h2 data-t="over"></h2>
+    <p class="note" data-t="overNote"></p>
+    <div class="rows">
+      <button type="button" data-a="reset" data-t="reset"></button><span data-t="resetNote"></span>
+      <button type="button" data-a="installer" data-t="installer"></button><span data-t="installerNote"></span>
+      <button type="button" data-a="remove" data-t="remove"></button><span data-t="removeNote"></span>
+      <button type="button" id="folder" data-t="folder"></button><span data-t="folderNote"></span>
+    </div>
+  </section>
+</main>
+<footer>
+  <div id="message"></div>
+  <button type="button" id="cancel" data-t="cancel"></button>
+  <button type="button" class="primary" id="go" data-a="start" data-t="go"></button>
+</footer>
+<script>
+"use strict";
+const words = {
+  en: {
+    window: "Try patina", title: "Start patina",
+    machine: "The machine", machineNote: "What patina gets of this PC while it runs. Your choice stays for the next starts.",
+    memory: "Memory", cpus: "Processors", auto: "Automatic", gb: "GB",
+    host: "This PC's own processor (experimental)",
+    hostNote: "patina gets every feature of the processor, which draws its desktop faster. If patina then does not start or stops, turn this off.",
+    over: "Start over", overNote: "Each asks once more before it deletes anything. Windows is never touched.",
+    reset: "Install patina again…", resetNote: "Deletes patina's virtual disk and sets patina up anew.",
+    installer: "Install with patina's installer…", installerNote: "Deletes the virtual disk and installs from patina's image, as on a PC.",
+    remove: "Remove patina from this PC…", removeNote: "Deletes the virtual disk and the data folder.",
+    folder: "Open the data folder", folderNote: "The virtual disk and the logs.",
+    cancel: "Not now", go: "Start patina",
+    count: (n) => `patina starts in ${n} s. Click anywhere to wait.`,
+    starting: "patina starts in a window of its own; you can close this one.",
+    sending: "One moment…",
+    gone: "Try patina no longer answers; close this window and open Try patina again.",
+  },
+  de: {
+    window: "Probiere patina auf Windows", title: "patina starten",
+    machine: "Die Maschine", machineNote: "Was patina von diesem PC bekommt, solange es läuft. Deine Wahl bleibt für die nächsten Starts.",
+    memory: "Arbeitsspeicher", cpus: "Prozessoren", auto: "Automatisch", gb: "GB",
+    host: "Der Prozessor dieses PCs (experimentell)",
+    hostNote: "patina bekommt alle Fähigkeiten des Prozessors, der seinen Desktop damit schneller zeichnet. Startet patina danach nicht oder bleibt es stehen, schalte das wieder aus.",
+    over: "Neu anfangen", overNote: "Jedes fragt noch einmal, bevor es etwas löscht. Windows bleibt unberührt.",
+    reset: "patina neu installieren…", resetNote: "Löscht patinas virtuelle Festplatte und richtet patina neu ein.",
+    installer: "Mit patinas Installer installieren…", installerNote: "Löscht die virtuelle Festplatte und installiert von patinas Image, wie auf einem PC.",
+    remove: "patina von diesem PC entfernen…", removeNote: "Löscht die virtuelle Festplatte und den Datenordner.",
+    folder: "Datenordner öffnen", folderNote: "Die virtuelle Festplatte und die Protokolle.",
+    cancel: "Jetzt nicht", go: "patina starten",
+    count: (n) => `patina startet in ${n} s. Klicke irgendwo, um zu warten.`,
+    starting: "patina startet in einem eigenen Fenster; dieses kannst du schließen.",
+    sending: "Einen Moment …",
+    gone: "Try patina antwortet nicht mehr; schließe dieses Fenster und öffne Try patina erneut.",
+  },
+};
+let t = words.en, sent = false, timer = 0;
+const $ = (id) => document.getElementById(id);
+const say = (text, error) => { $("message").textContent = text; $("message").className = error ? "error" : ""; };
+
+function option(select, value, text, selected) {
+  const o = document.createElement("option");
+  o.value = value; o.textContent = text; o.selected = selected;
+  select.append(o);
+}
+
+function render(d) {
+  const p = d.palette || {}, f = d.fonts || {};
+  t = d.german ? words.de : words.en;
+  document.documentElement.lang = d.german ? "de" : "en";
+  const css = document.documentElement.style;
+  const colours = { bg: "base00", panel: "base01", raised: "base02", muted: "base04", text: "base05",
+    bright: "base07", accent: "accent", accent2: "accent_alt", error: "base08" };
+  for (const [name, key] of Object.entries(colours)) if (p[key]) css.setProperty("--" + name, p[key]);
+  if (p.base02) css.setProperty("--line", p.base02);
+  if (f.ui) css.setProperty("--ui", `"${f.ui}", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif`);
+  if (f.display) css.setProperty("--display", `"${f.display}", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`);
+  if (f.monospace) css.setProperty("--mono", `"${f.monospace}", "Cascadia Mono", Consolas, monospace`);
+  for (const el of document.querySelectorAll("[data-t]")) el.textContent = t[el.dataset.t];
+  document.title = t.window;
+  $("versions").textContent = [d.release && "patina " + d.release, d.qemu && "QEMU " + d.qemu, "Try patina " + d.version]
+    .filter(Boolean).join(" · ");
+
+  const gb = (mb) => `${mb / 1024} ${t.gb}`;
+  option($("memory"), 0, `${t.auto} (${gb(d.auto_memory_mb)})`, !d.settings.memory_mb);
+  for (const mb of d.memory_choices || []) option($("memory"), mb, gb(mb), mb === d.settings.memory_mb);
+  option($("cpus"), 0, `${t.auto} (${d.auto_cpus})`, !d.settings.cpus);
+  for (const n of d.cpu_choices || []) option($("cpus"), n, n, n === d.settings.cpus);
+  $("hostRow").hidden = !d.host_cpu;
+  $("host").checked = d.host_cpu && !!d.settings.host_cpu;
+
+  // patina starts by itself, unless the page is touched first.
+  let left = d.seconds;
+  if (left > 0) {
+    say(t.count(left));
+    timer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) { hold(); choose("start"); } else say(t.count(left));
+    }, 1000);
+  }
+  document.body.classList.add("ready");
+  $("go").focus();
+}
+
+function hold() {
+  if (!timer) return;
+  clearInterval(timer); timer = 0;
+  if (!sent) say("");
+}
+for (const event of ["pointerdown", "keydown", "wheel"]) window.addEventListener(event, hold, { passive: true });
+
+async function choose(action) {
+  if (sent) return;
+  const settings = { memory_mb: +$("memory").value, cpus: +$("cpus").value, host_cpu: $("host").checked };
+  for (const b of document.querySelectorAll("button")) b.disabled = true;
+  say(t.sending);
+  try {
+    const reply = await fetch("choose", { method: "POST", body: JSON.stringify({ action, settings }) });
+    const body = await reply.json();
+    if (!reply.ok) throw new Error(body.error);
+    sent = true;
+    say(action === "start" ? t.starting : "");
+  } catch (err) {
+    for (const b of document.querySelectorAll("button")) b.disabled = false;
+    say(err.message || t.gone, true);
+  }
+}
+for (const b of document.querySelectorAll("[data-a]")) b.addEventListener("click", () => { hold(); choose(b.dataset.a); });
+$("folder").addEventListener("click", () => fetch("folder", { method: "POST" }));
+$("cancel").addEventListener("click", () => { fetch("cancel", { method: "POST" }); window.close(); });
+window.addEventListener("pagehide", () => { if (!sent) navigator.sendBeacon("cancel"); });
+setInterval(() => fetch("alive", { method: "POST" }).catch(() => {}), 3000);
+fetch("alive", { method: "POST" }).catch(() => {});
+
+fetch("start.json").then((r) => r.json()).then(render)
+  .catch(() => { document.body.classList.add("ready"); say(t.gone, true); });
+</script>
+</body>
+</html>

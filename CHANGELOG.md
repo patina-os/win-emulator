@@ -6,6 +6,16 @@ All notable changes to Try patina for Windows are documented here. The format fo
 
 ## [Unreleased]
 
+### Added
+
+- A start page opens before patina starts, once it is installed: it starts patina by
+  itself after ten seconds, and waits when you touch it. There you choose how much
+  memory and how many processors patina gets, open the data folder, or install patina
+  again, with its installer, or remove it. Those three were only in the icon's menu,
+  and only once patina ran, which took a start and most of a minute.
+- "This PC's own processor (experimental)" on the start page gives patina the host's
+  processor as `TRY_PATINA_CPU=host` does, without a variable in Windows' environment.
+
 ## [0.0.9] - 2026-11-15
 
 Faster on stock QEMU, and the setup says that patina is slower here than on a PC.

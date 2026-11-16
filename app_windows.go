@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -44,12 +45,16 @@ type app struct {
 	qemuDir string
 	qemuVer string // from QEMU's VERSION file, such as 11.1.0
 	accel   string
-	cpu     string // cpuHost while the host's processor is tried (cpuEnv), else empty
+	cpu     string // cpuHost while the host's processor is tried (the start page, cpuEnv), else empty
 	noSound bool   // DirectSound found no sound device
+	// What the start page lets the user choose, and whether this run is past that page: it
+	// shows once, before the first start of a machine that was installed already.
+	settings Settings
+	asked    bool
 
 	mu    sync.Mutex
 	qmp   *QMP   // the running machine, nil while none runs
-	after string // what follows when the machine has stopped: "", "reset" or "remove"
+	after string // what follows when the machine has stopped: "" or an action of the start page's
 
 	status, shutdown, forceOff, folder, reset, installer, remove, update, about *systray.MenuItem
 }
@@ -73,9 +78,10 @@ func newApp() (*app, error) {
 	a.logFile = f
 	a.log = log.New(f, "", log.LstdFlags)
 	a.log.Printf("Try patina %s starts, data in %s", version, a.dir)
-	if os.Getenv(cpuEnv) == cpuHost {
+	a.settings = loadSettings(a.dir)
+	if a.settings.HostCPU || os.Getenv(cpuEnv) == cpuHost {
 		a.cpu = cpuHost
-		a.log.Printf("%s=%s: the guest gets the host's processor where QEMU is new enough", cpuEnv, cpuHost)
+		a.log.Print("the guest gets the host's processor where QEMU is new enough")
 	}
 	a.icon = filepath.Join(a.dir, iconFile)
 	if ico, err := appIcon(); err == nil {
@@ -172,22 +178,16 @@ func (a *app) menu() {
 		case <-a.folder.ClickedCh:
 			open(a.dir)
 		case <-a.reset.ClickedCh:
-			if zenity.Question("Delete patina's virtual disk and install patina again? Everything in it is lost: "+
-				"files, apps and settings. Windows is not touched.",
-				a.opts(zenity.OKLabel("Delete and install"), zenity.CancelLabel("Keep patina"), zenity.WarningIcon)...) == nil {
-				a.stopFor("reset")
+			if a.confirm(actionReset) {
+				a.stopFor(actionReset)
 			}
 		case <-a.installer.ClickedCh:
-			if zenity.Question("Delete patina's virtual disk and install patina with its installer instead, as on "+
-				"a PC? Everything in it is lost: files, apps and settings. Windows is not touched.",
-				a.opts(zenity.OKLabel("Delete and install"), zenity.CancelLabel("Keep patina"), zenity.WarningIcon)...) == nil {
-				a.stopFor("installer")
+			if a.confirm(actionInstaller) {
+				a.stopFor(actionInstaller)
 			}
 		case <-a.remove.ClickedCh:
-			if zenity.Question("Remove patina from this PC? This deletes the virtual disk with everything in it, and "+
-				"the data folder "+a.dir+". QEMU stays installed; remove it under Settings, Apps.",
-				a.opts(zenity.OKLabel("Remove"), zenity.CancelLabel("Keep patina"), zenity.WarningIcon)...) == nil {
-				a.stopFor("remove")
+			if a.confirm(actionRemove) {
+				a.stopFor(actionRemove)
 			}
 		case <-a.update.ClickedCh:
 			open(github + "/" + launcherRepo + "/releases/latest")
@@ -197,6 +197,23 @@ func (a *app) menu() {
 				"github.com/%s\ngithub.com/%s\n\nGPL-3.0-or-later", version, launcherRepo, patinaRepo), a.opts()...)
 		}
 	}
+}
+
+// confirm asks before the machine is deleted: to install patina again, to install it
+// with its installer, or to remove it. The tray's menu and the start page ask the same.
+func (a *app) confirm(action string) bool {
+	text, ok := "Delete patina's virtual disk and install patina again? Everything in it is lost: "+
+		"files, apps and settings. Windows is not touched.", "Delete and install"
+	switch action {
+	case actionInstaller:
+		text = "Delete patina's virtual disk and install patina with its installer instead, as on " +
+			"a PC? Everything in it is lost: files, apps and settings. Windows is not touched."
+	case actionRemove:
+		text, ok = "Remove patina from this PC? This deletes the virtual disk with everything in it, and "+
+			"the data folder "+a.dir+". QEMU stays installed; remove it under Settings, Apps.", "Remove"
+	}
+	return zenity.Question(text,
+		a.opts(zenity.OKLabel(ok), zenity.CancelLabel("Keep patina"), zenity.WarningIcon)...) == nil
 }
 
 // stopFor turns the machine off and leaves what follows to run.
@@ -231,6 +248,7 @@ func (a *app) run() error {
 			return err
 		}
 		if st.Phase != phaseInstalled {
+			a.asked = true // a machine set up just now starts without the start page
 			if done, err := a.setup(st); err != nil || !done {
 				return err
 			}
@@ -241,27 +259,35 @@ func (a *app) run() error {
 				return err
 			}
 		}
-		reason, err := a.boot("")
-		if err != nil {
-			return err
+		reason, after := "", ""
+		if !a.asked {
+			a.asked = true
+			if after, err = a.chooseStart(st); err != nil {
+				return err
+			}
 		}
-		a.mu.Lock()
-		after := a.after
-		a.after = ""
-		a.mu.Unlock()
+		if after == "" {
+			if reason, err = a.boot(""); err != nil {
+				return err
+			}
+			a.mu.Lock()
+			after = a.after
+			a.after = ""
+			a.mu.Unlock()
+		}
 		switch after {
-		case "reset":
+		case actionReset:
 			if err := a.wipe(); err != nil {
 				return err
 			}
-		case "installer":
+		case actionInstaller:
 			if err := a.wipe(); err != nil {
 				return err
 			}
 			if err := (State{Route: routeInstaller}).save(a.dir); err != nil {
 				return err
 			}
-		case "remove":
+		case actionRemove:
 			return a.removeAll()
 		default:
 			if reason == "" {
@@ -273,6 +299,41 @@ func (a *app) run() error {
 			}
 			a.log.Print("patina restarted: starting it again") // a restart is an exit (Machine.Args)
 		}
+	}
+}
+
+// chooseStart shows the start page until the user chose: nothing to do after it when
+// patina is to start (the page's settings are kept and used), or what to do with the
+// machine in place of a start, once the user said yes to it. A page that was closed
+// quits the launcher.
+func (a *app) chooseStart(st State) (after string, err error) {
+	for seconds := startSeconds; ; seconds = 0 { // after a question the page waits for the user
+		c, err := a.askStart(st, seconds)
+		if errors.Is(err, errPageClosed) {
+			a.log.Print("the start page was closed")
+			return "", zenity.ErrCanceled
+		}
+		if err != nil {
+			return "", err
+		}
+		if c.Action != actionStart {
+			if a.confirm(c.Action) {
+				return c.Action, nil
+			}
+			continue
+		}
+		if c.Settings != a.settings {
+			a.settings = c.Settings
+			if err := a.settings.save(a.dir); err != nil {
+				a.log.Printf("the settings are not kept: %v", err)
+			}
+			a.log.Printf("settings: %+v", a.settings)
+		}
+		a.cpu = ""
+		if a.settings.HostCPU || os.Getenv(cpuEnv) == cpuHost {
+			a.cpu = cpuHost
+		}
+		return "", nil
 	}
 }
 
@@ -492,17 +553,17 @@ func (a *app) setup(st State) (done bool, err error) {
 	a.after = ""
 	a.mu.Unlock()
 	switch after {
-	case "reset":
+	case actionReset:
 		if err := a.wipe(); err != nil {
 			return false, err
 		}
 		return a.setup(State{})
-	case "installer":
+	case actionInstaller:
 		if err := a.wipe(); err != nil {
 			return false, err
 		}
 		return a.setup(State{Route: routeInstaller})
-	case "remove":
+	case actionRemove:
 		return false, a.removeAll()
 	}
 	if !installed {
@@ -636,8 +697,12 @@ func (a *app) setupDisk() (bool, error) {
 	if err := fetchJSON(ctx, a.http, releaseAsset(patinaRepo, tag, setupPagesName), sums[setupPagesName], &pages); err != nil {
 		return false, fmt.Errorf("cannot read patina's setup pages: %w", err)
 	}
+	// The release's colours and fonts, for the start page of the machine once it is set up.
+	if b, err := json.Marshal(look{pages.Palette, pages.Fonts}); err == nil {
+		os.WriteFile(filepath.Join(a.dir, lookFile), b, 0o644)
+	}
 	answers, err := a.askSetup(pages)
-	if errors.Is(err, errSetupCanceled) {
+	if errors.Is(err, errPageClosed) {
 		return false, nil
 	}
 	if err != nil {
@@ -731,7 +796,7 @@ const reasonWedged = "wedged"
 // start runs QEMU once. early is true when it stopped within seconds without a
 // shutdown, which is how a refused accelerator or a bad option shows.
 func (a *app) start(iso string) (reason string, early bool, err error) {
-	memoryMB, cpus := sizing(hostMemoryMB(), runtime.NumCPU())
+	memoryMB, cpus := a.settings.size(hostMemoryMB(), runtime.NumCPU())
 	m := Machine{QEMUDir: a.qemuDir, Version: a.qemuVer, DataDir: a.dir, MemoryMB: memoryMB, CPUs: cpus,
 		Accel: a.accel, CPU: a.cpu, ISO: iso, QMP: freeAddr(), NoSound: a.noSound, SerialLog: filepath.Join(a.dir, serialLog)}
 	if answers := filepath.Join(a.dir, answersFile); fileExists(answers) {

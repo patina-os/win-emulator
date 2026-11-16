@@ -3,6 +3,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -179,6 +180,41 @@ func TestSizing(t *testing.T) {
 		mb, cpus := sizing(c.hostMB, c.hostCPUs)
 		if mb != c.wantMB || cpus != c.wantCPUs {
 			t.Errorf("sizing(%d, %d) = %d, %d; want %d, %d", c.hostMB, c.hostCPUs, mb, cpus, c.wantMB, c.wantCPUs)
+		}
+	}
+}
+
+func TestSettings(t *testing.T) {
+	dir := t.TempDir()
+	if s := loadSettings(dir); s != (Settings{}) {
+		t.Errorf("no file: %+v", s)
+	}
+	want := Settings{MemoryMB: 12288, CPUs: 6, HostCPU: true}
+	if err := want.save(dir); err != nil {
+		t.Fatal(err)
+	}
+	if s := loadSettings(dir); s != want {
+		t.Errorf("loaded %+v, want %+v", s, want)
+	}
+	os.WriteFile(filepath.Join(dir, settingsFile), []byte("{broken"), 0o644)
+	if s := loadSettings(dir); s != (Settings{}) {
+		t.Errorf("a broken file: %+v", s)
+	}
+	for _, c := range []struct {
+		s                Settings
+		hostMB           uint64
+		hostCPUs         int
+		wantMB, wantCPUs int
+	}{
+		{Settings{}, 16384, 8, 8192, 4},                          // the launcher's choice
+		{Settings{MemoryMB: 12288, CPUs: 8}, 16384, 8, 12288, 8}, // the user's
+		{Settings{MemoryMB: 12288, CPUs: 8}, 8192, 4, 4096, 2},   // on a smaller PC: the launcher's again
+		{Settings{MemoryMB: 4096}, 32768, 16, 4096, 8},           // less than the launcher would give
+		{Settings{MemoryMB: 5000, CPUs: 3}, 32768, 16, 8192, 8},  // nothing the page offers
+		{Settings{MemoryMB: 4096, CPUs: 2}, 4096, 2, 3072, 2},    // 4 GB is all this host has
+	} {
+		if mb, cpus := c.s.size(c.hostMB, c.hostCPUs); mb != c.wantMB || cpus != c.wantCPUs {
+			t.Errorf("%+v on %d MB, %d CPUs: %d, %d; want %d, %d", c.s, c.hostMB, c.hostCPUs, mb, cpus, c.wantMB, c.wantCPUs)
 		}
 	}
 }
