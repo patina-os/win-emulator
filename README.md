@@ -30,10 +30,16 @@ Windows 10 or 11 · x86_64 · hardware virtualization · more than 4 GB of memor
    start sets up your account and then its apps, which needs the internet and takes a
    while; the login screen comes after it.
 
-From then on, `TryPatina.exe` starts patina straight away.
+From then on, `TryPatina.exe` opens its start page and starts patina ten seconds later
+by itself, or at once with "Start patina".
 
 ## Using it
 
+- **The start page** shows before patina starts. Touch it and it waits: there you pick
+  how much memory and how many processors patina gets (the launcher's own choice is
+  half of the PC's, 4 to 8 GB and 2 to 8 processors), turn on "This PC's own
+  processor" (experimental, see below), open the data folder, or start over, without
+  waiting for patina to run first. "Not now" and closing the page quit Try patina.
 - **Closing.** Shut patina down from its own menu, or with "Shut down patina" on the
   patina icon in the notification area. The window's close button does nothing, so a
   click cannot cut the power to patina's disk; "Turn off now…" in the icon's menu does,
@@ -58,7 +64,8 @@ From then on, `TryPatina.exe` starts patina straight away.
   monitor shows it pixel for pixel.
 - **Updates** of patina are patina's own: `patina update` in a terminal. When a newer
   `TryPatina.exe` is released, its icon menu says so.
-- **Starting over.** "Install patina again…" deletes the virtual disk and asks the
+- **Starting over**, from the start page or the icon's menu while patina runs.
+  "Install patina again…" deletes the virtual disk and asks the
   setup again; the downloaded disk is used again unless a newer release has another.
   "Install with patina's installer…" deletes it and installs from patina's
   `patina-amd64.hybrid.iso` with the installer instead, as on a PC: press Enter at the
@@ -91,12 +98,13 @@ libraries: [zenity](https://github.com/ncruces/zenity) for its dialogs and
 [systray](https://github.com/fyne-io/systray) for its icon. It owns no image and no
 binary but itself:
 
-- **The setup window** is one page in patina's look, served by the launcher on
+- **The setup window and the start page** are each one page in patina's look, served by the launcher on
   `127.0.0.1` under a random path and shown by Microsoft Edge as an app window (Edge
   draws WebView2 too; with a profile of its own, deleted afterwards), or by the default
   browser where Edge was removed. Its pages, words, colours and fonts are patina's: the
   release's `patina-setup.json`, the installer's own pages, each answer a compact row
-  and each theme with its picture.
+  and each theme with its picture. The start page keeps the release's colours and
+  fonts (`look.json`) and its choices (`settings.json`) in the data folder.
 
 - **QEMU** is the official Windows build (`SoftwareFreedomConservancy.QEMU` in winget,
   from [qemu.weilnetz.de](https://qemu.weilnetz.de/)), on the Windows Hypervisor
@@ -113,11 +121,11 @@ binary but itself:
   virtio networking, Intel HD audio on DirectSound (none when Windows has no sound
   device, which QEMU does not start without), half the host's memory (4 to 8 GB)
   and processors (2 to 8). The CPU model is `qemu64` with SSSE3, SSE4 and AES, the
-  set the Windows Hypervisor Platform runs safely in stock QEMU. `TRY_PATINA_CPU=host`
-  in Windows' environment gives the guest the host's processor from QEMU 11.1, with
-  AVX2 for the drawing: a switch to try, since no run on a real PC confirmed it yet.
-  A start that fails with it goes back to the safe model; a patina that fails later
-  needs the variable unset.
+  set the Windows Hypervisor Platform runs safely in stock QEMU. "This PC's own
+  processor" on the start page (or `TRY_PATINA_CPU=host` in Windows' environment)
+  gives the guest the host's processor from QEMU 11.1, with AVX2 for the drawing: a
+  switch to try, since no run on a real PC confirmed it yet. A start that fails with
+  it goes back to the safe model; a patina that fails later needs it turned off.
 - **What was left out for speed**, and why: writing to the disk without flushes
   (`cache=unsafe`), because the launcher ends a QEMU that hangs and the disk would not
   survive it; the Hyper-V interrupt controller alone (`pic=off`), which does not wake a
