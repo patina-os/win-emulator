@@ -33,17 +33,47 @@ const (
 // Files in the data directory.
 const (
 	stateFile = "state.json"
-	diskFile  = "disk.qcow2"
-	varsFile  = "efivars.fd"
-	iconFile  = "patina.ico"
-	qemuLog   = "qemu.log"
-	appLog    = "launcher.log"
+	// What the start page lets the user choose, and the look the setup's pages came in
+	// (the release's palette and fonts), for the start page of an installed machine.
+	settingsFile = "settings.json"
+	lookFile     = "look.json"
+	diskFile     = "disk.qcow2"
+	varsFile     = "efivars.fd"
+	iconFile     = "patina.ico"
+	qemuLog      = "qemu.log"
+	appLog       = "launcher.log"
 	// The ready-made disk as downloaded: disk.qcow2 keeps only what the guest changed.
 	baseFile = "patina.qcow2"
 	// The setup's answers, the password among them, until the guest set itself up.
 	answersFile = "setup.env"
 	serialLog   = "serial.log"
 )
+
+// Settings are what the start page lets the user choose, kept in settings.json beside
+// the state, which a machine installed again does not take with it. Zero is the
+// launcher's own choice (sizing in machine.go).
+type Settings struct {
+	MemoryMB int  `json:"memory_mb,omitempty"`
+	CPUs     int  `json:"cpus,omitempty"`
+	HostCPU  bool `json:"host_cpu,omitempty"` // the host's processor as the guest's (cpuHost)
+}
+
+// loadSettings reads the settings; a file that is missing or broken is no settings.
+func loadSettings(dir string) Settings {
+	var s Settings
+	if b, err := os.ReadFile(filepath.Join(dir, settingsFile)); err == nil && json.Unmarshal(b, &s) != nil {
+		return Settings{}
+	}
+	return s
+}
+
+func (s Settings) save(dir string) error {
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, settingsFile), append(b, '\n'), 0o644)
+}
 
 func loadState(dir string) (State, error) {
 	var s State

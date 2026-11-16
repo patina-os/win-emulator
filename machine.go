@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -201,6 +202,42 @@ func sizing(hostMB uint64, hostCPUs int) (memoryMB, cpus int) {
 	memoryMB -= memoryMB % 256
 	cpus = min(max(hostCPUs/2, 2), 8)
 	cpus = min(cpus, max(hostCPUs, 1))
+	return memoryMB, cpus
+}
+
+// What the start page offers in place of sizing's choice: memory in MB up to three
+// quarters of the host's, and processors up to the host's.
+func memoryChoices(hostMB uint64) []int {
+	var c []int
+	for _, gb := range []int{4, 6, 8, 12, 16, 24, 32, 48, 64} {
+		if uint64(gb)*1024 <= hostMB*3/4 {
+			c = append(c, gb*1024)
+		}
+	}
+	return c
+}
+
+func cpuChoices(hostCPUs int) []int {
+	var c []int
+	for _, n := range []int{2, 4, 6, 8, 12, 16} {
+		if n <= hostCPUs {
+			c = append(c, n)
+		}
+	}
+	return c
+}
+
+// size is the machine's memory and processors: the user's settings where this host can
+// still give them (the file may come from another PC, or memory was taken out), and
+// sizing's choice otherwise.
+func (s Settings) size(hostMB uint64, hostCPUs int) (memoryMB, cpus int) {
+	memoryMB, cpus = sizing(hostMB, hostCPUs)
+	if slices.Contains(memoryChoices(hostMB), s.MemoryMB) {
+		memoryMB = s.MemoryMB
+	}
+	if slices.Contains(cpuChoices(hostCPUs), s.CPUs) {
+		cpus = s.CPUs
+	}
 	return memoryMB, cpus
 }
 
